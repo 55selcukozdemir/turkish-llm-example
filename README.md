@@ -1,1 +1,1 @@
-# turkish-llm-example
+# My LLM studies will be here. 
