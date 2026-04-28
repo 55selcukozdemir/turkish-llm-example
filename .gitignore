@@ -1,5 +1,6 @@
 
 weights/
+github-source/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

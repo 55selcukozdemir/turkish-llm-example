@@ -1,27 +1,30 @@
-nn.Dropout
+## nn.Dropout
 Bir matrisi ara ara bazı elemanlarını sıfırlıyor.
 
-
-nn.Embedding
+## nn.Embedding
 her index için bir vektör tutar
 
-nn.init
+## nn.init
 Model parametrelerini ayarlayan metottur. 
 
 
-nn.Linear
-Bir formülün parametrelerini tutar
+## nn.Linear
 
+Bir formülün parametrelerini tutar. Bu aslında bir lineer (affine) dönüşümü uygular. Yani sadece boyut değiştirtir. Örneğin 128 girer 64 olarak çıkar. Ama çıktı her zaman lineerdir. Lineerlikten çıkması için aşağıda ki gibi bir tasarım gerekir. Bu tasarımda ReLu gibi non-lineer fonksiyonlar eklenerek daha karmaşık çalışması sağlanır. 
 
-nn.Module
+nn.Linear → ReLU → nn.Linear → ReLU
+
+## nn.LayerNorm
+
+## nn.Module
 sınıfları bunla ayarlıyoruz
 
 
-nn.ModuleList
+## nn.ModuleList
 Module'leri liste halinde tutar.
 
 
-nn.Parameter
+## nn.Parameter
 
 https://www.geeksforgeeks.org/deep-learning/understanding-torchnnparameter/
 
