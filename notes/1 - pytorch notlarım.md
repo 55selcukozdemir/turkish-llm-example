@@ -15,6 +15,8 @@ Bir formülün parametrelerini tutar. Bu aslında bir lineer (affine) dönüşü
 nn.Linear → ReLU → nn.Linear → ReLU
 
 ## nn.LayerNorm
+Veriyi bir formul dizisine göre yeniden boyutlar. Ona bakıcam
+
 
 ## nn.Module
 sınıfları bunla ayarlıyoruz

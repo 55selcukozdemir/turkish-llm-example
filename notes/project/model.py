@@ -1,0 +1,140 @@
+from vocabulary import Vocabulary
+from tokenizer import Tokenizer
+from vocab_model import VocabModel
+from bert import BERT, BertForMaskedLM
+
+import torch 
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
+# Hiperparametreler
+hidden_size = 256       # Hidden state boyutu
+num_layers = 2          # Transformer katmanı sayısı
+num_heads = 4           # Attention head sayısı
+ff_hidden_size = 512    # Feed-Forward katmanının gizli boyutu
+max_seq_len = 32        # BERT dizi uzunluğu
+char_max_len = 70       # Bir kelimenin maksimum karakter uzunluğu
+bit_depth = 8
+
+test_text_path = "/Users/55selcukozdemir/Desktop/turkish-llm-example/notes/project/cikti.txt"
+
+print("Dosyalar okunuyor ve Tokenizer, Vocabulary hazırlanıyor...")
+tokenizer = Tokenizer(test_text_path, hidden_size)
+vocabulary = Vocabulary(max_seq_len=char_max_len, bit_depth=bit_depth)
+
+# Tokenizer üzerinden kelimeleri alalım
+vocab_words = [w for idx, w in tokenizer.word_list]
+vocab_size = len(vocab_words)
+
+# Her kelimenin 8-bit matrisini (pos-encoding ile) önden hesaplayalım
+print(f"Vocab Size: {vocab_size}")
+vocab_matrices = []
+for word in vocab_words:
+    mat = vocabulary.get_vocab_array(word)
+    vocab_matrices.append(mat)
+    
+# (vocab_size, char_max_len, bit_depth)
+vocab_matrices_tensor = torch.tensor(np.array(vocab_matrices), dtype=torch.float32)
+
+print("Modeller başlatılıyor...")
+feature_length = char_max_len * bit_depth
+vocab_model = VocabModel(feature_length, hidden_size)
+
+base_bert = BERT(
+    hidden_size=hidden_size,
+    num_layers=num_layers,
+    num_heads=num_heads,
+    ff_hidden_size=ff_hidden_size,
+    max_seq_len=max_seq_len
+)
+
+model = BertForMaskedLM(base_bert)
+
+# Optimizasyon için hem BERT hem de VocabModel parametreleri verilir
+optimizer = optim.Adam(list(model.parameters()) + list(vocab_model.parameters()), lr=1e-3)
+criterion = nn.CrossEntropyLoss()
+epochs = 500
+
+print("Eğitim başlıyor...")
+for epoch in range(epochs):
+    optimizer.zero_grad()
+    
+    # 1. VocabModel ile o anki iterasyon için kelime embedding'lerini hesapla
+    # vocab_matrices_tensor boyutu: (vocab_size, char_max_len, bit_depth)
+    # word_embeddings boyutu: (vocab_size, hidden_size)
+    word_embeddings = vocab_model(vocab_matrices_tensor)
+    
+    # Dummy input (Örnek batch: 4 cümle, max_seq_len=32)
+    # Gerçek eğitimde Tokenizer'dan gelen encode edilmiş cümleleri kullanacaksınız.
+    input_ids = torch.randint(0, vocab_size, (4, max_seq_len))
+    targets = input_ids.clone() 
+    
+    # 2. Modeli çalıştır
+    # prediction_scores: (batch_size, seq_len, vocab_size)
+    prediction_scores = model(input_ids, word_embeddings)
+    
+    # Loss hesabı: (batch_size * seq_len, vocab_size) vs (batch_size * seq_len)
+    loss = criterion(prediction_scores.view(-1, vocab_size), targets.view(-1))
+    
+    # 3. Geri yayılım (Backpropagation)
+    loss.backward()
+    optimizer.step()
+    
+    print(f"Epoch {epoch+1:02d}/{epochs} - Loss: {loss.item():.4f}")
+
+print("Eğitim tamamlandı!")
+print(f"VocabModel gradyan normu: {vocab_model.linear1.weight.grad.norm().item():.4f}")
+
+# ----------------- TEST KISMI -----------------
+print("\n--- Model Testi ---")
+model.eval()
+vocab_model.eval()
+
+word_to_idx = {w: idx for idx, w in tokenizer.word_list}
+idx_to_word = {idx: w for idx, w in tokenizer.word_list}
+
+import re
+def tokenize(text):
+    return re.findall(r"\w+|[^\w\s]", text.lower())
+
+def test_text(text):
+    # Metni kelimelere ayır
+    tokens = tokenize(text)
+    
+    # Kelimeleri indexlere çevir (Sözlükte yoksa en yakınını/rastgele veya es geçebiliriz, burada basitçe atlıyoruz)
+    indices = [word_to_idx[t] for t in tokens if t in word_to_idx]
+    
+    if len(indices) == 0:
+        print("Sözlükte bu metne ait kelime bulunamadı!")
+        return
+        
+    # Tensor'a çevir: (batch_size=1, seq_len)
+    # Model max_seq_len (32) boyut bekliyor olabilir ancak Transformer doğası gereği seq_len dinamik olabilir.
+    # Yine de max_seq_len kadar padding veya kesme yapabiliriz.
+    input_tensor = torch.tensor([indices], dtype=torch.long)
+    if input_tensor.size(1) > max_seq_len:
+        input_tensor = input_tensor[:, :max_seq_len]
+        
+    with torch.no_grad():
+        # Tüm embeddingleri al (test sırasında da değişebilir)
+        word_embeddings = vocab_model(vocab_matrices_tensor)
+        
+        # Modele ver
+        predictions = model(input_tensor, word_embeddings)
+        
+        # En yüksek olasılıklı kelimelerin indexlerini al: (1, seq_len)
+        predicted_indices = torch.argmax(predictions, dim=-1)[0].tolist()
+        
+    # Indexleri metne geri çevir
+    predicted_text = " ".join([idx_to_word[idx] for idx in predicted_indices])
+    
+    print(f"Girdi Metni: '{text}'")
+    print(f"Tahmin Edilen Çıktı: '{predicted_text}'")
+
+test_metni = "çevre çok güzel" # Sözlükte olan kelimelerle örnek (cevre.txt dosyasından)
+test_text(test_metni)
+test_text("Selam")
+test_text("Bugün hava nasıl?")
+test_text("Ne yapıyorsun?")
+
