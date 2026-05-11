@@ -1,11 +1,16 @@
 from vocabulary import Vocabulary
 from tokenizer import Tokenizer
 from vocab_model import VocabModel
+from data import DataPreparer
 from bert import BERT, BertForMaskedLM
+from tensor_viewer import tensor_to_blender_ply, export_csv
+import re
 
 import torch 
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader
+
 import numpy as np
 
 # Hiperparametreler
@@ -20,12 +25,14 @@ bit_depth = 8
 test_text_path = "/Users/55selcukozdemir/Desktop/turkish-llm-example/notes/project/cikti.txt"
 
 print("Dosyalar okunuyor ve Tokenizer, Vocabulary hazırlanıyor...")
+datapreparer = DataPreparer(test_text_path)
 tokenizer = Tokenizer(test_text_path, hidden_size)
 vocabulary = Vocabulary(max_seq_len=char_max_len, bit_depth=bit_depth)
 
 # Tokenizer üzerinden kelimeleri alalım
 vocab_words = [w for idx, w in tokenizer.word_list]
 vocab_size = len(vocab_words)
+print(vocab_size)
 
 # Her kelimenin 8-bit matrisini (pos-encoding ile) önden hesaplayalım
 print(f"Vocab Size: {vocab_size}")
@@ -54,10 +61,36 @@ model = BertForMaskedLM(base_bert)
 # Optimizasyon için hem BERT hem de VocabModel parametreleri verilir
 optimizer = optim.Adam(list(model.parameters()) + list(vocab_model.parameters()), lr=1e-3)
 criterion = nn.CrossEntropyLoss()
-epochs = 500
+epochs = 200
 
 print("Eğitim başlıyor...")
 for epoch in range(epochs):
+
+    batchs = datapreparer.get_split_batchs(10)
+    train_batchs = []
+    # 'y' indeksi için bir alt liste yoksa oluştur
+    for y in range(len(batchs)):
+        train_batchs.append([]) # Yeni bir alt liste (satır) ekle
+        for b in range(len(batchs[y])):
+            train_batchs[y].append([]) # Satırın içine elemanı ekle
+    
+    for y, batch in enumerate(batchs):
+        # her seferde birden fazla metin gelecek ve her metnin birden fazla kelimesi olduğu için ayrı ayrı değerlendirmeliyim.
+
+        for i2, b in enumerate(batch):
+            all_text = re.findall(r"\w+|[^\w\s]", b) # metni parçaladım
+            tmp = []
+
+            vocab_matrices = []
+            for i, c in enumerate(all_text): # her cümlenin kelimelerini ilk özellik çıkarımı için işliyorum.
+                vocab_matrices.append(vocabulary.get_vocab_array(c))
+            
+            tmp = vocab_model(torch.tensor(np.array(vocab_matrices), dtype=torch.float32)) # her kelimeye positional encoding benzeri bir şey uyguladım devam ettim.
+            
+        
+            train_batchs[y][i2] = tmp
+
+        
     optimizer.zero_grad()
     
     # 1. VocabModel ile o anki iterasyon için kelime embedding'lerini hesapla
@@ -72,8 +105,12 @@ for epoch in range(epochs):
     
     # 2. Modeli çalıştır
     # prediction_scores: (batch_size, seq_len, vocab_size)
-    prediction_scores = model(input_ids, word_embeddings)
+    prediction_scores: torch.Tensor = model(input_ids, word_embeddings)
     
+    # tensor_to_blender_ply(prediction_scores)
+    # export_csv(prediction_scores)
+
+
     # Loss hesabı: (batch_size * seq_len, vocab_size) vs (batch_size * seq_len)
     loss = criterion(prediction_scores.view(-1, vocab_size), targets.view(-1))
     
@@ -86,6 +123,32 @@ for epoch in range(epochs):
 print("Eğitim tamamlandı!")
 print(f"VocabModel gradyan normu: {vocab_model.linear1.weight.grad.norm().item():.4f}")
 
+# ----------------- MODEL KAYIT KISMI -----------------
+print("\n--- Modeller Kaydediliyor ---")
+torch.save(model.state_dict(), "bert_model.pth")
+torch.save(vocab_model.state_dict(), "vocab_model.pth")
+print("Modeller 'bert_model.pth' ve 'vocab_model.pth' olarak kaydedildi.")
+
+# ----------------- ISI HARİTASI ÇIKARMA -----------------
+print("\n--- VocabModel Isı Haritası (Heatmap) Çıkarılıyor ---")
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # linear1 katmanının ağırlıklarını al
+    # weight shape: (2048, feature_length)
+    weights = vocab_model.linear1.weight.detach().cpu().numpy()
+    
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(weights[:100, :], cmap='viridis') # Çok büyük olduğu için ilk 100 nöronu çizelim ki anlaşılsın
+    plt.title("VocabModel Linear1 Ağırlık Isı Haritası (İlk 100 Nöron)")
+    plt.xlabel("Girdi Özellikleri (Karakter x 8-bit)")
+    plt.ylabel("Gizli Katman Nöronları (İlk 100)")
+    plt.savefig("vocab_model_heatmap.png")
+    plt.close()
+    print("Isı haritası 'vocab_model_heatmap.png' olarak kaydedildi.")
+except ImportError:
+    print("Isı haritası oluşturulamadı: 'matplotlib' veya 'seaborn' kütüphaneleri eksik.")
 # ----------------- TEST KISMI -----------------
 print("\n--- Model Testi ---")
 model.eval()

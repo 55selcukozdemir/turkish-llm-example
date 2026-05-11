@@ -1,79 +1,44 @@
-import torch
-import torch
-import torch.nn as nn
+import numpy as np
+import trimesh
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
+# 1. Veri Hazırlama (Örnek Fonksiyon)
+x = np.linspace(-5, 5, 100)
+y = np.linspace(-5, 5, 100)
+X, Y = np.meshgrid(x, y)
+Z = np.sin(np.sqrt(X**2 + Y**2)) # Buraya kendi model verinizi koyun
 
-class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        super().__init__()
-        assert d_model % num_heads == 0, "d_model num_heads'e kalansız bölünmeli"
+# 2. Renk Haritasını Oluşturma
+# Z değerlerini 0-1 arasına normalize edip 'viridis' gibi bir renk haritası atıyoruz
+norm = plt.Normalize(Z.min(), Z.max())
+cmap = cm.get_cmap('viridis') 
+rgba_colors = cmap(norm(Z))  # Matris formatında (100, 100, 4)
 
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.d_k = d_model // num_heads
+# 3. Noktaları (Vertices) ve Renkleri Düzleştirme
+# Trimesh için verileri (N, 3) ve (N, 4) formatına getirmeliyiz
+vertices = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])
+vertex_colors = (rgba_colors.reshape(-1, 4) * 255).astype(np.uint8)
 
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-        self.W_o = nn.Linear(d_model, d_model)
+# 4. Yüzeyleri (Faces) Oluşturma
+# Izgara üzerindeki noktaları birbirine bağlayarak üçgenler oluşturuyoruz
+rows, cols = X.shape
+faces = []
+for r in range(rows - 1):
+    for c in range(cols - 1):
+        v1 = r * cols + c
+        v2 = r * cols + (c + 1)
+        v3 = (r + 1) * cols + c
+        v4 = (r + 1) * cols + (c + 1)
+        # Her kare hücre için iki üçgen (Triangle Strip mantığı)
+        faces.append([v1, v2, v3])
+        faces.append([v2, v4, v3])
 
-        
-    def scaled_dot_product_attention(self, Q, K, V, mask=None):
+faces = np.array(faces)
 
-        pass
+# 5. Trimesh Objesini Yaratma ve Kaydetme
+mesh = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_colors=vertex_colors)
 
-    def forward(self, x, mask):
-        pass
-
-
-class FeedForward(nn.Module):
-    def __init__(self):
-        pass
-
-    def forward(self):
-        pass
-
-class EncoderLayer2(nn.Module):
-    def __init__(self):
-        # attention
-        # feed forward
-        
-        pass
-    def forward(self, x, mask):
-        # attention = 
-        pass
-
-
-
-
-
-class Bert2(nn.Module):
-    def __init__(self, vocabulary_length, d_model, num_layers = 12, num_heads = 12, dropout = 0.1):
-        self.token_embedding = nn.Embedding(vocabulary_length, d_model)
-        self.positional_embedding = nn.Embedding(vocabulary_length, d_model)
-        self.segment_embedding = nn.Embedding(2, d_model)
-
-        self.norm = nn.Linear(d_model)
-        self.dropout  = nn.Dropout(dropout)
-        
-        # aşaığda ki gibi birden fazla encoder katmanı oluşturulmasını bekliyorum.
-        # ["" for _ in range(num_layers)]
-        self.layers = nn.ModuleList([])
-
-    def forward(self, x, segment_info, mask = None):
-        seq_length = x.size(1)
-        positions = torch.arange(seq_length, dtype=torch.long, device = x.device)
-        positions = positions.unsqueeze(0).expand_as(x)
-
-        idx_embeddings = self.token_embedding(x)
-        pos_embeddings = self.positional_embedding(positions)
-        seg_embeddings = self.segment_embedding(segment_info)
-
-        embeddings = idx_embeddings + pos_embeddings + seg_embeddings
-        x = self.dropout(self.norm(embeddings))
-
-        for layer in self.layers:
-            x = layer(x, mask)
-
-        return x
-
+# Blender için en iyisi .obj (mtl ile birlikte) veya .glb formatıdır
+mesh.export('model_blender.obj')
+print("Model başarıyla dışa aktarıldı!")

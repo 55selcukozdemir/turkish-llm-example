@@ -12,7 +12,7 @@ class VocabModel(nn.Module):
 
     def forward(self, vocab):
         # Gelen vocab (batch_size, max_seq_len, bit_depth) şeklinde olabilir, bunu düzleştir (flatten)
-        if len(vocab.shape) > 2:
+        if len(vocab.shape) > 2 :
             vocab = vocab.view(vocab.size(0), -1)
 
         x = self.linear1(vocab)

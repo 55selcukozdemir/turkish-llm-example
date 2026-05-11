@@ -12,7 +12,8 @@ class Vocabulary():
             ' ']      
         """
         self.vocab = (
-            ['<PAD>', '<UNK>', '<BOS>', '<EOS>', '<MASK>', ' '] +
+            # Bunlar karakter değil ki
+            # ['<PAD>', '<UNK>', '<BOS>', '<EOS>', '<MASK>', ' '] +
             
             list('abcçdefgğhıijklmnoöprsştuüvyz') +
             list('ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ') +
