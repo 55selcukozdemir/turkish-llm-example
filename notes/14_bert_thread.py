@@ -83,7 +83,9 @@ class TrainerThread(QtCore.QThread):
             # İleri besleme (Forward Pass)
             # Çıktı boyutu: (Batch Size, Sequence Length, Vocab Size)
             outputs = model(input_ids, token_type_ids, attention_mask)
-            self.data_signal.emit(outputs.detach().cpu().numpy())
+            weight = dict(model.named_parameters())["bert.embedding.token_type_embeddings.weight"]
+            params_info = [(f"{name} - {len(param.shape)} - {param.shape}") for name, param in model.named_parameters()]
+            self.data_signal.emit(weight.detach().cpu().numpy())
             # Loss hesaplamak için tensor boyutlarını (Batch * Seq_Len, Vocab_Size) şeklinde düzleştir
             loss = criterion(outputs.view(-1, vocab_size), labels.view(-1))
             
