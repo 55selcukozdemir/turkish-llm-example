@@ -27,22 +27,7 @@ test_text_path = "/Users/55selcukozdemir/Desktop/turkish-llm-example/notes/proje
 print("Dosyalar okunuyor ve Tokenizer, Vocabulary hazırlanıyor...")
 datapreparer = DataPreparer(test_text_path)
 tokenizer = Tokenizer(test_text_path, hidden_size)
-vocabulary = Vocabulary(max_seq_len=char_max_len, bit_depth=bit_depth)
 
-# Tokenizer üzerinden kelimeleri alalım
-vocab_words = [w for idx, w in tokenizer.word_list]
-vocab_size = len(vocab_words)
-print(vocab_size)
-
-# Her kelimenin 8-bit matrisini (pos-encoding ile) önden hesaplayalım
-print(f"Vocab Size: {vocab_size}")
-vocab_matrices = []
-for word in vocab_words:
-    mat = vocabulary.get_vocab_array(word)
-    vocab_matrices.append(mat)
-    
-# (vocab_size, char_max_len, bit_depth)
-vocab_matrices_tensor = torch.tensor(np.array(vocab_matrices), dtype=torch.float32)
 
 print("Modeller başlatılıyor...")
 feature_length = char_max_len * bit_depth

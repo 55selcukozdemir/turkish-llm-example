@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from benimkutuphanem import tensor_gorsellestir, TensorMonitor
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
@@ -207,7 +208,6 @@ if __name__ == "__main__":
     
     print("\nEğitim Başlıyor (Örnek 20 Epoch)...")
     model.train()
-    
     for epoch in range(1, 21):
         optimizer.zero_grad()
         
