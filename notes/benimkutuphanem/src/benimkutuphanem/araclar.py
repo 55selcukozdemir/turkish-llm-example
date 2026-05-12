@@ -13,32 +13,32 @@ import seaborn as sns
 
 def selam():
     return "Merhaba"
-def visualize_tensor_scatter(view_widget, tensor, dot_size=10):
-    """
-    Tensörü GLScatterPlotItem ile görselleştirir (Seaborn magma_r colormap).
-    """
+def visualize_tensor_scatter(view_widget, tensor, dot_size=10, threshold_low=0.0, threshold_high=0.0):
 
-    # 1. Noktalar (DOĞRU FORMAT)
-    indices = np.argwhere(tensor)
-    center = indices.mean(axis=0)
-    # view_widget.opts['center'] = pg.Vector(center[0], center[1], center[2])
+    if torch.is_tensor(tensor):
+        tensor = tensor.detach().cpu().numpy()
+
+    # Threshold maskesi
+    mask = (tensor >= threshold_low) & (tensor <= threshold_high)
+
+    # Noktalar
+    indices = np.argwhere(mask)
+
     if indices.shape[0] == 0:
         print("Görselleştirilecek veri bulunamadı.")
         return None
 
-    # 2. Değerler
-    values = tensor.flatten()
+    # Sadece seçilen voxel değerleri
+    values = tensor[mask]
 
-    # 3. Normalize
+    # Normalize
     norm = mcolors.Normalize(vmin=values.min(), vmax=values.max())
 
-    # 4. Seaborn colormap
+    # Colormap
     cmap = sns.color_palette("magma_r", as_cmap=True)
 
-    # 5. RGBA renkler
     colors = cmap(norm(values))
 
-    # 6. Scatter plot (KRİTİK: pxMode=False)
     scatter = gl.GLScatterPlotItem(
         pos=indices,
         color=colors,
@@ -47,21 +47,8 @@ def visualize_tensor_scatter(view_widget, tensor, dot_size=10):
     )
 
     view_widget.addItem(scatter)
+
     return scatter
-def tensor_gorsellestir(data):
-    app = pg.mkQApp("Scatter Tensör Görünümü")
-    view = gl.GLViewWidget()
-    view.show()
-    view.setCameraPosition(distance=50)
-
-    # Örnek: Yüksek boyutlu bir tensör (Örn: 50x50x50)
-    # Bu 125.000 hücre demektir, Mesh ile çok kasar ama Scatter ile akıcıdır.
- 
-
-    visualize_tensor_scatter(view, data, threshold=0.2)
-
-    if (sys.flags.interactive != 1) or not hasattr(pg, 'QtCore'):
-        sys.exit(app.exec_())
 
 class TensorMonitor(QtCore.QObject):
     def __init__(self):
@@ -77,23 +64,11 @@ class TensorMonitor(QtCore.QObject):
         self.main_layout = pg.QtWidgets.QHBoxLayout()
         self.controls_layout = pg.QtWidgets.QVBoxLayout()
 
-        # =========================
-        # UPDATE BUTTON
-        # =========================
-        self.button = pg.QtWidgets.QPushButton("Grafiği Güncelle")
-        self.controls_layout.addWidget(self.button)
-
-        # =========================
-        # 3D VIEW
-        # =========================
         self.view = gl.GLViewWidget()
 
         # başlangıç kamera ayarı
         self.view.opts['distance'] = 200
 
-        # =========================
-        # SLIDERS
-        # =========================
         self.slider_x_label = pg.QtWidgets.QLabel("X")
         self.slider_y_label = pg.QtWidgets.QLabel("Y")
         self.slider_z_label = pg.QtWidgets.QLabel("Z")
@@ -117,11 +92,45 @@ class TensorMonitor(QtCore.QObject):
 
         self.controls_layout.addWidget(self.slider_z_label)
         self.controls_layout.addWidget(self.slider_z)
+        self.controls_layout.addStretch()
 
         # signals
         self.slider_x.valueChanged.connect(self.update_center)
         self.slider_y.valueChanged.connect(self.update_center)
         self.slider_z.valueChanged.connect(self.update_center)
+
+        self.current_data = None
+        self.threshold = (0.2, 0.2)
+
+        self.threshold_label_min = pg.QtWidgets.QLabel("Threshold_min")
+        self.controls_layout.addWidget(self.threshold_label_min)
+
+        self.threshold_label_max = pg.QtWidgets.QLabel("Threshold_max")
+        self.controls_layout.addWidget(self.threshold_label_max)
+
+        self.threshold_slider_low = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.threshold_slider_low.setMinimum(-1000)
+        self.threshold_slider_low.setMaximum(10000)
+        self.threshold_slider_low.setValue(-1000)
+        self.controls_layout.addWidget(self.threshold_slider_low)
+
+        self.threshold_slider_high = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.threshold_slider_high.setMinimum(-1000)
+        self.threshold_slider_high.setMaximum(1000)
+        self.threshold_slider_high.setValue(1000)
+        self.controls_layout.addWidget(self.threshold_slider_high)
+
+        self.threshold_label_min.setText(
+            f"Threshold min: {self.get_threshold_value()[0]:.2f}"
+        )
+
+        self.threshold_label_max.setText(
+            f"Threshold max: {self.get_threshold_value()[1]:.2f}"
+        )
+
+
+        self.threshold_slider_low.valueChanged.connect(self.update_threshold)
+        self.threshold_slider_high.valueChanged.connect(self.update_threshold)
 
         # =========================
         # MAIN LAYOUT
@@ -139,6 +148,8 @@ class TensorMonitor(QtCore.QObject):
         # =========================
         self.scatter = None
         self.tensor_shape = None
+        self.min_trashold = 0
+        self.max_trashold = 0
 
     @QtCore.pyqtSlot(object)
     def guncelle(self, data):
@@ -146,7 +157,7 @@ class TensorMonitor(QtCore.QObject):
         print("visualization started")
 
         try:
-
+            self.current_data = data
             if self.tensor_shape != data.shape:
                 self.tensor_shape = data.shape
 
@@ -159,13 +170,24 @@ class TensorMonitor(QtCore.QObject):
                 self.slider_x.setValue(self.tensor_shape[0] // 2)
                 self.slider_y.setValue(self.tensor_shape[1] // 2)
                 self.slider_z.setValue(self.tensor_shape[2] // 2)
+
                             # ilk center
                 self.update_center()
+
+            if int(np.min(data) * 1000) < self.min_trashold:
+                self.threshold_slider_low.setMinimum(int(np.min(data) * 1000))
+                self.threshold_slider_high.setMinimum(int(np.min(data) * 1000))
+                self.min_trashold = int(np.min(data) * 1000) - 1000
+
+            if int(np.max(data) * 1000) > self.max_trashold:
+                self.threshold_slider_low.setMaximum(int(np.max(data) * 1000))
+                self.threshold_slider_high.setMaximum(int(np.max(data) * 1000))
+                self.max_trashold = int(np.max(data) * 1000) + 1000
 
             if self.scatter is not None:
                 self.view.removeItem(self.scatter)
 
-            self.scatter = visualize_tensor_scatter(self.view, data)
+            self.scatter = visualize_tensor_scatter(self.view, data, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
 
 
 
@@ -181,6 +203,29 @@ class TensorMonitor(QtCore.QObject):
         self.view.opts['center'] = pg.Vector(x, y, z)
 
         self.view.update()
+    def update_threshold(self):
 
+        self.threshold_label_min.setText(
+            f"Threshold min: {self.get_threshold_value()[0]:.2f}"
+        )
+
+        self.threshold_label_max.setText(
+            f"Threshold max: {self.get_threshold_value()[1]:.2f}"
+        )
+
+        if self.current_data is not None:
+
+            if self.scatter is not None:
+                self.view.removeItem(self.scatter)
+
+            self.scatter = visualize_tensor_scatter(
+                self.view,
+                self.current_data,
+                threshold_low=self.get_threshold_value()[0],
+                threshold_high=self.get_threshold_value()[1]
+            )
+
+    def get_threshold_value(self):
+        return (self.threshold_slider_low.value() / 100, self.threshold_slider_high.value() / 100)
     def run(self):
         self.app.exec_()

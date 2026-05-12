@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from benimkutuphanem import tensor_gorsellestir, TensorMonitor
+from benimkutuphanem import TensorMonitor
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
