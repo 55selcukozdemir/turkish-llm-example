@@ -66,54 +66,121 @@ def tensor_gorsellestir(data):
 class TensorMonitor(QtCore.QObject):
     def __init__(self):
         super().__init__()
+
         self.app = pg.mkQApp("Monitor")
 
+        # =========================
+        # WINDOW
+        # =========================
         self.window = pg.QtWidgets.QWidget()
-        self.layout = pg.QtWidgets.QVBoxLayout()
 
-        # 3D view
-        self.view = gl.GLViewWidget()
-        self.layout.addWidget(self.view)
+        self.main_layout = pg.QtWidgets.QHBoxLayout()
+        self.controls_layout = pg.QtWidgets.QVBoxLayout()
 
+        # =========================
+        # UPDATE BUTTON
+        # =========================
         self.button = pg.QtWidgets.QPushButton("Grafiği Güncelle")
-        self.layout.addWidget(self.button)
+        self.controls_layout.addWidget(self.button)
 
-        self.zoom_in_btn = pg.QtWidgets.QPushButton("Zoom +")
-        self.zoom_out_btn = pg.QtWidgets.QPushButton("Zoom -")
+        # =========================
+        # 3D VIEW
+        # =========================
+        self.view = gl.GLViewWidget()
 
-        self.layout.addWidget(self.zoom_in_btn)
-        self.layout.addWidget(self.zoom_out_btn)
+        # başlangıç kamera ayarı
+        self.view.opts['distance'] = 200
+
+        # =========================
+        # SLIDERS
+        # =========================
+        self.slider_x_label = pg.QtWidgets.QLabel("X")
+        self.slider_y_label = pg.QtWidgets.QLabel("Y")
+        self.slider_z_label = pg.QtWidgets.QLabel("Z")
+
+        self.slider_x = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.slider_y = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.slider_z = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
+
+        # başlangıç min/max
+        for slider in [self.slider_x, self.slider_y, self.slider_z]:
+            slider.setMinimum(0)
+            slider.setMaximum(100)
+            slider.setValue(50)
+
+        # layout
+        self.controls_layout.addWidget(self.slider_x_label)
+        self.controls_layout.addWidget(self.slider_x)
+
+        self.controls_layout.addWidget(self.slider_y_label)
+        self.controls_layout.addWidget(self.slider_y)
+
+        self.controls_layout.addWidget(self.slider_z_label)
+        self.controls_layout.addWidget(self.slider_z)
 
         # signals
-        self.zoom_in_btn.clicked.connect(self.zoom_in)
-        self.zoom_out_btn.clicked.connect(self.zoom_out)
+        self.slider_x.valueChanged.connect(self.update_center)
+        self.slider_y.valueChanged.connect(self.update_center)
+        self.slider_z.valueChanged.connect(self.update_center)
 
-        self.window.setLayout(self.layout)
+        # =========================
+        # MAIN LAYOUT
+        # =========================
+        self.main_layout.addLayout(self.controls_layout, stretch=1)
+        self.main_layout.addWidget(self.view, stretch=5)
+
+        self.window.setLayout(self.main_layout)
+
+        self.window.resize(1200, 800)
         self.window.show()
 
+        # =========================
+        # STATE
+        # =========================
         self.scatter = None
+        self.tensor_shape = None
 
     @QtCore.pyqtSlot(object)
     def guncelle(self, data):
+
         print("visualization started")
+
         try:
+
+            if self.tensor_shape != data.shape:
+                self.tensor_shape = data.shape
+
+                # slider limitlerini tensor boyutuna göre ayarla
+                self.slider_x.setMaximum(self.tensor_shape[0] - 1)
+                self.slider_y.setMaximum(self.tensor_shape[1] - 1)
+                self.slider_z.setMaximum(self.tensor_shape[2] - 1)
+
+                # slider başlangıç pozisyonları
+                self.slider_x.setValue(self.tensor_shape[0] // 2)
+                self.slider_y.setValue(self.tensor_shape[1] // 2)
+                self.slider_z.setValue(self.tensor_shape[2] // 2)
+                            # ilk center
+                self.update_center()
+
             if self.scatter is not None:
                 self.view.removeItem(self.scatter)
 
             self.scatter = visualize_tensor_scatter(self.view, data)
 
+
+
         except Exception as e:
             print(f"Görselleştirme hatası: {e}")
 
-    def zoom_in(self):
-        cam = self.view.cameraPosition()
-        new_dist = max(1, cam[2] * 5)
-        self.view.setCameraPosition(distance=new_dist)
+    def update_center(self):
 
-    def zoom_out(self):
-        cam = self.view.cameraPosition()
-        new_dist = cam[2] * 1.2
-        self.view.setCameraPosition(distance=new_dist)
+        x = self.slider_x.value()
+        y = self.slider_y.value()
+        z = self.slider_z.value()
+
+        self.view.opts['center'] = pg.Vector(x, y, z)
+
+        self.view.update()
 
     def run(self):
         self.app.exec_()
