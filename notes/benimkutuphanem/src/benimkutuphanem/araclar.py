@@ -20,7 +20,8 @@ def visualize_tensor_scatter(view_widget, tensor, dot_size=10):
 
     # 1. Noktalar (DOĞRU FORMAT)
     indices = np.argwhere(tensor)
-
+    center = indices.mean(axis=0)
+    # view_widget.opts['center'] = pg.Vector(center[0], center[1], center[2])
     if indices.shape[0] == 0:
         print("Görselleştirilecek veri bulunamadı.")
         return None
@@ -72,9 +73,6 @@ class TensorMonitor(QtCore.QObject):
 
         # 3D view
         self.view = gl.GLViewWidget()
-        self.view.setMinimumSize(400, 300)
-        self.view.setMaximumSize(1200, 800)
-        self.view.setCameraPosition(distance=50)
         self.layout.addWidget(self.view)
 
         self.button = pg.QtWidgets.QPushButton("Grafiği Güncelle")
