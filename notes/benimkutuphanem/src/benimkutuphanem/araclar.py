@@ -4,17 +4,12 @@ from pyqtgraph.Qt import QtCore
 import numpy as np
 import sys
 
+import qdarkstyle
 import torch
 
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import seaborn as sns
-
-
-
-
-
-
 
 def selam():
     return "Merhaba"
@@ -25,46 +20,38 @@ def visualize_tensor_scatter_dict(
     dot_size=10,
     threshold_low=0.0,
     threshold_high=0.0,
-    x_spacing=300
+    x_spacing=50
 ):
     cmap = sns.color_palette("magma_r", as_cmap=True)
 
     all_scatter = []
-
+    a = 0
     for i, tensor in enumerate(tensor_dict.values()):
-
+        
         if torch.is_tensor(tensor):
             tensor = tensor.detach().cpu().numpy()
+        
+        if len(tensor.shape) == 1:
+            tensor = np.expand_dims(tensor, axis=0)
+            tensor = np.expand_dims(tensor, axis=0)
+        
+        if len(tensor.shape) == 2:
+            tensor = np.expand_dims(tensor, axis=0)
 
         mask = (tensor >= threshold_low) & (tensor <= threshold_high)
         indices = np.argwhere(mask)
-        # Boyutu 3'e tamamla
-        if indices.shape[1] == 1:
-            # 1D -> (x,0,0)
-            indices = np.concatenate([
-                indices,
-                np.zeros((indices.shape[0], 2))
-            ], axis=1)
-
-        elif indices.shape[1] == 2:
-            # 2D -> (x,y,0)
-            indices = np.concatenate([
-                indices,
-                np.zeros((indices.shape[0], 1))
-            ], axis=1)
-
-        elif indices.shape[1] > 3:
-            # Fazla boyut varsa ilk 3'ü kullan
-            indices = indices[:, :3]
-
+       
         values = tensor[mask]
+        if values.size == 0:
+            continue
         norm = mcolors.Normalize(vmin=values.min(), vmax=values.max())
 
         colors = cmap(norm(values))
 
         # 🔥 X ekseninde offset
         indices = indices.copy()
-        indices[..., 0] += i * x_spacing
+        a += 1
+        indices[:, -1] += a * x_spacing
 
         scatter = gl.GLScatterPlotItem(
             pos=indices,
@@ -82,130 +69,191 @@ def visualize_tensor_scatter_dict(
 
     return all_scatter
 
-def visualize_tensor_scatter(view_widget, tensor, dot_size=10, threshold_low=0.0, threshold_high=0.0):
+class ViewPresetButtonGroup(pg.QtWidgets.QWidget):
 
-    if torch.is_tensor(tensor):
-        tensor = tensor.detach().cpu().numpy()
+    def __init__(self, opengl_view : gl.GLViewWidget):
+        super().__init__()
+        self.opengl_view = opengl_view
 
-    # Threshold maskesi
-    mask = (tensor >= threshold_low) & (tensor <= threshold_high)
+        layout = pg.QtWidgets.QHBoxLayout(self)
+        
+        self.button_side = pg.QtWidgets.QPushButton(text="yan")
+        self.button_front = pg.QtWidgets.QPushButton(text="ön")
+        self.button_top = pg.QtWidgets.QPushButton(text="üst")
 
-    # Noktalar
-    indices = np.argwhere(mask)
+        self.button_side.clicked.connect(lambda :self.set_camera_angle("side"))
+        self.button_front.clicked.connect(lambda: self.set_camera_angle("front"))
+        self.button_top.clicked.connect(lambda: self.set_camera_angle("top"))
 
-    if indices.shape[0] == 0:
-        print("Görselleştirilecek veri bulunamadı.")
-        return None
+        layout.addWidget(self.button_side)
+        layout.addWidget(self.button_front)
+        layout.addWidget(self.button_top)
 
-    # Sadece seçilen voxel değerleri
-    values = tensor[mask]
 
-    # Normalize
-    norm = mcolors.Normalize(vmin=values.min(), vmax=values.max())
+    def set_camera_angle(self, position):
 
-    # Colormap
-    cmap = sns.color_palette("magma_r", as_cmap=True)
+        if position == "top":
+            self.opengl_view.setCameraPosition(azimuth=0, elevation=90)
 
-    colors = cmap(norm(values))
+        elif position == "front":
+            self.opengl_view.setCameraPosition(azimuth=-90, elevation=0)
 
-    scatter = gl.GLScatterPlotItem(
-        pos=indices,
-        color=colors,
-        size=dot_size,
-        pxMode=True
-    )
+        elif position == "side": # right
+            self.opengl_view.setCameraPosition(azimuth=0, elevation=0)
+        pass
 
-    view_widget.addItem(scatter)
+    
+class DragValue(pg.QtWidgets.QDoubleSpinBox):
 
-    return scatter
+    def __init__(self, default = 0):
+        super().__init__()
+        self.setValue(default)
+        self.setRange(-1e9, 1e9)
+        self.setDecimals(4)
+        self.setSingleStep(0.1)
+        
+        locale = QtCore.QLocale(QtCore.QLocale.C)
+        locale.setNumberOptions(QtCore.QLocale.RejectGroupSeparator)
+        self.setLocale(locale)
+
+        self.dragging = False
+        self.last_x = 0
+
+    def mousePressEvent(self, ev):
+
+        if ev.button() == QtCore.Qt.MiddleButton:
+            self.dragging = True
+            self.last_x = ev.globalX()
+            self.setCursor(QtCore.Qt.SizeHorCursor)
+
+        super().mousePressEvent(ev)
+
+    def mouseMoveEvent(self, ev):
+
+        if self.dragging:
+
+            dx = ev.globalX() - self.last_x
+            self.last_x = ev.globalX()
+
+            sensitivity = self.singleStep()
+
+            modifiers = pg.QtWidgets.QApplication.keyboardModifiers()
+
+            # Shift = hassas
+            if modifiers & QtCore.Qt.ShiftModifier:
+                sensitivity *= 0.1
+
+            # Ctrl = snapping
+            if modifiers & QtCore.Qt.ControlModifier:
+                sensitivity *= 10
+
+            self.setValue(
+                self.value() + dx * sensitivity
+            )
+
+            # Sonsuz drag hissi
+            pg.QtGui.QCursor.setPos(
+                self.mapToGlobal(self.rect().center())
+            )
+
+            self.last_x = pg.QtGui.QCursor.pos().x()
+
+        super().mouseMoveEvent(ev)
+
+    def mouseReleaseEvent(self, ev):
+
+        if ev.button() == QtCore.Qt.MiddleButton:
+            self.dragging = False
+            self.unsetCursor()
+
+        super().mouseReleaseEvent(ev)
+
+class CustomDragValue(pg.QtWidgets.QWidget):
+    def __init__(self, label, default = 0):
+        super().__init__()
+        layout = pg.QtWidgets.QHBoxLayout(self)
+        self.drag_value = DragValue(default)
+        self.textChanged = self.drag_value.textChanged.connect
+
+        self.label = pg.QtWidgets.QLabel(label)
+        self.value = self.drag_value.value
+
+        layout.addWidget(self.label)
+        layout.addWidget(self.drag_value)
+
+class ControlLayout(pg.QtWidgets.QVBoxLayout):
+    def __init__(self, opengl_view):
+        super().__init__()
+        self.opengl_view = opengl_view
+        # Center ==
+        self.slide_x = CustomDragValue("x")
+        self.slide_y = CustomDragValue("y")
+        self.slide_z = CustomDragValue("z")
+
+        self.addWidget(self.slide_x)
+        self.addWidget(self.slide_y)
+        self.addWidget(self.slide_z)
+
+        for a in [self.slide_x, self.slide_y, self.slide_z]:
+            a.textChanged(self.update_center)
+        # Center --
+
+        self.view_preset_button_group = ViewPresetButtonGroup(opengl_view)
+        self.addWidget(self.view_preset_button_group)
+
+        self.update_distance = CustomDragValue("distance", default=200)
+        self.update_distance.textChanged(self.set_distance)
+        self.addWidget(self.update_distance)
+        self.addStretch()
+
+        self.threshold_slider_low = CustomDragValue("threshold low", -10)
+        self.threshold_slider_high = CustomDragValue("threshold high", 10)
+
+        self.addWidget(self.threshold_slider_low)
+        self.addWidget(self.threshold_slider_high)
+
+    
+    def update_center(self):
+        x = int(self.slide_x.value())
+        y = int(self.slide_y.value())
+        z = int(self.slide_z.value())
+
+        self.opengl_view.opts['center'] = pg.Vector(x, y, z)
+
+        self.opengl_view.update()
+
+    def set_distance(self, distance):
+        self.opengl_view.opts["distance"] = float(distance)
+        self.opengl_view.update()
+
+
 
 class TensorMonitor(QtCore.QObject):
     def __init__(self):
         super().__init__()
 
+        # Variable
+        self.current_data = None
         self.app = pg.mkQApp("Monitor")
-
+        self.app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
         # =========================
         # WINDOW
         # =========================
         self.window = pg.QtWidgets.QWidget()
 
         self.main_layout = pg.QtWidgets.QHBoxLayout()
-        self.controls_layout = pg.QtWidgets.QVBoxLayout()
 
-        self.view = gl.GLViewWidget()
+        self.opengl_view = gl.GLViewWidget()
 
-        # başlangıç kamera ayarı
-        self.view.opts['distance'] = 200
-
-        self.slider_x_label = pg.QtWidgets.QLabel("X")
-        self.slider_y_label = pg.QtWidgets.QLabel("Y")
-        self.slider_z_label = pg.QtWidgets.QLabel("Z")
-
-        self.slider_x = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.slider_y = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.slider_z = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
-
-        # başlangıç min/max
-        for slider in [self.slider_x, self.slider_y, self.slider_z]:
-            slider.setMinimum(0)
-            slider.setMaximum(100)
-            slider.setValue(50)
-
-        # layout
-        self.controls_layout.addWidget(self.slider_x_label)
-        self.controls_layout.addWidget(self.slider_x)
-
-        self.controls_layout.addWidget(self.slider_y_label)
-        self.controls_layout.addWidget(self.slider_y)
-
-        self.controls_layout.addWidget(self.slider_z_label)
-        self.controls_layout.addWidget(self.slider_z)
-        self.controls_layout.addStretch()
-
-        # signals
-        self.slider_x.valueChanged.connect(self.update_center)
-        self.slider_y.valueChanged.connect(self.update_center)
-        self.slider_z.valueChanged.connect(self.update_center)
-
-        self.current_data = None
-        self.threshold = (0.2, 0.2)
-
-        self.threshold_label_min = pg.QtWidgets.QLabel("Threshold_min")
-        self.controls_layout.addWidget(self.threshold_label_min)
-
-        self.threshold_label_max = pg.QtWidgets.QLabel("Threshold_max")
-        self.controls_layout.addWidget(self.threshold_label_max)
-
-        self.threshold_slider_low = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.threshold_slider_low.setMinimum(-1000)
-        self.threshold_slider_low.setMaximum(10000)
-        self.threshold_slider_low.setValue(-1000)
-        self.controls_layout.addWidget(self.threshold_slider_low)
-
-        self.threshold_slider_high = pg.QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.threshold_slider_high.setMinimum(-1000)
-        self.threshold_slider_high.setMaximum(1000)
-        self.threshold_slider_high.setValue(1000)
-        self.controls_layout.addWidget(self.threshold_slider_high)
-
-        self.threshold_label_min.setText(
-            f"Threshold min: {self.get_threshold_value()[0]:.2f}"
-        )
-
-        self.threshold_label_max.setText(
-            f"Threshold max: {self.get_threshold_value()[1]:.2f}"
-        )
-
-
-        self.threshold_slider_low.valueChanged.connect(self.update_threshold)
-        self.threshold_slider_high.valueChanged.connect(self.update_threshold)
+        self.controls_layout = ControlLayout(self.opengl_view)
+        self.controls_layout.threshold_slider_low.textChanged(self.update_data)
+        self.controls_layout.threshold_slider_high.textChanged(self.update_data)
 
         # =========================
         # MAIN LAYOUT
         # =========================
         self.main_layout.addLayout(self.controls_layout, stretch=1)
-        self.main_layout.addWidget(self.view, stretch=5)
+        self.main_layout.addWidget(self.opengl_view, stretch=5)
 
         self.window.setLayout(self.main_layout)
 
@@ -216,166 +264,33 @@ class TensorMonitor(QtCore.QObject):
         # STATE
         # =========================
         self.scatter = None
-        self.tensor_shape = None
-        self.min_trashold = 0
-        self.max_trashold = 0
 
-    def aget_global_min_max(self, tensor_dict):
-        global_min = float("inf")
-        global_max = float("-inf")
-
-        for i, tensor in enumerate(tensor_dict.values()):
-
-            if torch.is_tensor(tensor):
-                tensor = tensor.detach().cpu().numpy()
-
-            t_min = tensor.min()
-            t_max = tensor.max()
-
-            if t_min < global_min:
-                global_min = t_min
-
-            if t_max > global_max:
-                global_max = t_max
-
-        return global_min, global_max
-    
-    def compute_scene_bounds(self, tensor_dict, threshold_low=0.0, threshold_high=0.0, x_spacing=50):
-        all_points = []
-
-        for i, tensor in enumerate(tensor_dict.values()):
-
-            if torch.is_tensor(tensor):
-                tensor = tensor.detach().cpu().numpy()
-
-            mask = (tensor >= threshold_low) & (tensor <= threshold_high)
-            coords = np.argwhere(mask)
-
-            if coords.shape[0] == 0:
-                continue
-
-            # x offset ekle
-            coords = coords.copy()
-            coords[:, 0] += i * x_spacing
-
-            all_points.append(coords)
-
-        if len(all_points) == 0:
-            return (0, 0, 0)
-
-        all_points = np.vstack(all_points)
-
-        min_xyz = all_points.min(axis=0)
-        max_xyz = all_points.max(axis=0)
-
-        size_xyz = tuple(max_xyz - min_xyz)
-
-        return size_xyz
     @QtCore.pyqtSlot(object)
     def guncelle(self, data_dic):
-        data = None
-        print("visualization started")
+
         if getattr(self, "_updating", False):
             return
 
         self._updating = True
         try:
-            self.current_data = data
             self.current_data_dic = data_dic
-            # if self.tensor_shape != data.shape:
-            #     self.tensor_shape = data.shape
-                
-            #     if data_dic is not None:
-            #         self.tensor_shape = self.compute_scene_bounds(data_dic)
-
-            #     # slider limitlerini tensor boyutuna göre ayarla
-            #     self.slider_x.setMaximum(self.tensor_shape[0] - 1)
-            #     self.slider_y.setMaximum(self.tensor_shape[1] - 1)
-            #     self.slider_z.setMaximum(self.tensor_shape[2] - 1)
-
-            #     # slider başlangıç pozisyonları
-            #     self.slider_x.setValue(self.tensor_shape[0] // 2)
-            #     self.slider_y.setValue(self.tensor_shape[1] // 2)
-            #     self.slider_z.setValue(self.tensor_shape[2] // 2)
-
-            #                 # ilk center
-            #     self.update_center()
-
-            if self.current_data_dic is not None:
-                min_val, max_val = self.aget_global_min_max(data_dic)
-            else:
-                min_val = np.min(data)
-                max_val = np.max(data) 
-
-            min_val = int(min_val * 1000)
-            max_val = int(max_val * 1000)
-            
-            if min_val < self.min_trashold:
-                self.threshold_slider_low.setMinimum(min_val)
-                self.threshold_slider_high.setMinimum(min_val)
-                self.min_trashold = min_val - 1000
-
-            if max_val > self.max_trashold:
-                self.threshold_slider_low.setMaximum(max_val)
-                self.threshold_slider_high.setMaximum(max_val)
-                self.max_trashold = max_val + 1000
-
-            if self.scatter is not None:
-                # if type(self.scatter) is list:
-                #     for item in self.scatter:
-                #         self.view.removeItem(item)
-                # else:
-                #         self.view.removeItem(self.scatter)
-
-                self.view.clear()
-
-            if data_dic is not None:
-                self.scatter = visualize_tensor_scatter_dict(self.view, data_dic, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
-            else:
-                self.scatter = visualize_tensor_scatter(self.view, data, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
-
+            self.update_data()
 
             pg.Qt.QtTest.QTest.qWait(1000)
         except Exception as e:
-            print(f"Görselleştirme hatası: {e}")
+            print(f"Görselleştirme hatası: {e.with_traceback()}")
         finally:
             self._updating = False
 
-    
-    
-    def update_center(self):
-
-        x = self.slider_x.value()
-        y = self.slider_y.value()
-        z = self.slider_z.value()
-
-        self.view.opts['center'] = pg.Vector(x, y, z)
-
-        self.view.update()
-    def update_threshold(self):
-
-        self.threshold_label_min.setText(
-            f"Threshold min: {self.get_threshold_value()[0]:.2f}"
-        )
-
-        self.threshold_label_max.setText(
-            f"Threshold max: {self.get_threshold_value()[1]:.2f}"
-        )
-
+    def update_data(self):
         if self.scatter is not None:
-                self.view.removeItem(self.scatter)
+                self.opengl_view.clear()
 
-        if self.data_dic is not None:
-            visualize_tensor_scatter_dict(self.view, self.data_dic, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
-        elif self.current_data is not None:
-            self.scatter = visualize_tensor_scatter(
-                self.view,
-                self.current_data,
-                threshold_low=self.get_threshold_value()[0],
-                threshold_high=self.get_threshold_value()[1]
-            )
-
+        if self.current_data_dic is not None:
+            self.scatter = visualize_tensor_scatter_dict(self.opengl_view, self.current_data_dic, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
+        
     def get_threshold_value(self):
-        return (self.threshold_slider_low.value() / 100, self.threshold_slider_high.value() / 100)
+        return (self.controls_layout.threshold_slider_low.value() / 100, self.controls_layout.threshold_slider_high.value() / 100)
+    
     def run(self):
         self.app.exec_()

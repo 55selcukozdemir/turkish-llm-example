@@ -85,6 +85,7 @@ class TrainerThread(QtCore.QThread):
             outputs = model(input_ids, token_type_ids, attention_mask)
             weight = dict(model.named_parameters())["bert.embedding.token_type_embeddings.weight"]
             params_info = dict(model.named_parameters())
+            params_info["data"] = outputs
             self.data_signal.emit(params_info)
             # Loss hesaplamak için tensor boyutlarını (Batch * Seq_Len, Vocab_Size) şeklinde düzleştir
             loss = criterion(outputs.view(-1, vocab_size), labels.view(-1))
