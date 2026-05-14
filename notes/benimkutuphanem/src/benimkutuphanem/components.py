@@ -1,5 +1,6 @@
 from madcad import *
 from pyqtgraph.opengl import GLMeshItem, GLScatterPlotItem, GLViewWidget
+from pyglm import *
 import pyqtgraph.opengl as gl
 import numpy as np
 import torch
@@ -8,28 +9,35 @@ import matplotlib.colors as mcolors
 import seaborn as sns
 
 class Text3D(GLMeshItem):
+    _mesh_cache = {}
+
     def __init__(self, text_str: str, xyz: tuple=(0,0,0)):
-        super().__init__()
-        label = text.text(text_str, fill=True, size=1)
+        try:
+            if text_str in self._mesh_cache:
+                self.vertices, self.faces = self._mesh_cache[text_str]
+            else:
+                label = text.text(text_str, fill=True, size=5)
+                rot = mat3(rotate(radians(135), vec3(0,0,1)))
 
-        self.vertices = np.array([
-            [p.x + xyz[0], p.y, p.z]
-            for p in label.points
-        ], dtype=np.float32)
+                self.vertices = np.array([
+                    rot * p + xyz
+                    for p in label.points
+                ], dtype=np.float32)
 
-        self.faces = np.array([
-            list(face)
-            for face in label.faces
-        ], dtype=np.uint32)
-
-        super().__init__(
-            vertexes=self.vertices,
-            faces=self.faces,
-            smooth=False,
-            # shader="shaded",
-            drawEdges=False,
-            color=(1, 1, 1, 1)
-        )
+                self.faces = np.array([
+                    list(face)
+                    for face in label.faces
+                ], dtype=np.uint32)
+                self._mesh_cache[text_str] = (self.vertices, self.faces)
+            super().__init__(
+                vertexes=self.vertices,
+                faces=self.faces,
+                smooth=False,
+                drawEdges=False,
+                color=(1, 1, 1, 1)
+            )
+        except Exception as e:
+            print(f"text hatası: {e.with_traceback()}")
     def get_shape(self):
         if self.vertexes is None:
             return (0,0,0)
@@ -56,7 +64,7 @@ class TensorPlotItem(GLScatterPlotItem):
 
         self.tensor_data = tensor_data
         self.tensor_name = tensor_name
-        self.tensor_name_obj = Text3D(tensor_name, (tensor_data.shape[0] - 100, 0,0))
+        self.tensor_name_obj = Text3D(tensor_name, (xyz[0], xyz[1] + (tensor_data.shape[1]/2),0))
 
         mask = (tensor_data >= threshold_low) & (tensor_data <= threshold_high)
         indices = np.argwhere(mask)
@@ -103,17 +111,17 @@ class TensorPlotItemGrid():
     def __init__(self,opengl_view: gl.GLViewWidget, tensor_data_dict: dict[str, torch.Tensor | np.ndarray], dot_size=10, threshold_low=0.0, threshold_high=0.0, x_spacing=50):    
         self.opengl_items: list[TensorPlotItem] = []
 
-        toplam_x = 0 
+        toplam_y = 0 
         for key, value in tensor_data_dict.items():
-            plot_view = TensorPlotItem(key,value, (toplam_x, 0, 0), dot_size, threshold_low, threshold_high, x_spacing)
-            toplam_x += plot_view.get_max_lenght()[0]
+            plot_view = TensorPlotItem(key,value, (0, toplam_y, 0), dot_size, threshold_low, threshold_high, x_spacing)
+            toplam_y += plot_view.get_max_lenght()[1] + x_spacing
             opengl_view.addItem(plot_view)
             self.opengl_items.append(plot_view)
 
     def get_items(self):
         return self.opengl_items
     
-    def delete_items_in_opengl_view(opengl_view: gl.GLViewWidget, opengl_items: list[TensorPlotItem]):        
+    def delete_items_in_opengl_view(opengl_view: gl.GLViewWidget, opengl_items: list[TensorPlotItem]):      
         for i in opengl_items:
             opengl_view.removeItem(i)
             opengl_view.removeItem(i.tensor_name_obj)
