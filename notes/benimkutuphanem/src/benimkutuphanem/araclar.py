@@ -1,8 +1,8 @@
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
-import sys
 
 import qdarkstyle
 import torch
@@ -10,33 +10,27 @@ import torch
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import seaborn as sns
+from scipy.spatial import Delaunay
+
 
 def selam():
     return "Merhaba"
 
-def visualize_tensor_scatter_dict(
-    view_widget,
-    tensor_dict,
-    dot_size=10,
-    threshold_low=0.0,
-    threshold_high=0.0,
-    x_spacing=50
-):
+def visualize_tensor_scatter_dict(view_widget, tensor_dict, dot_size=10, threshold_low=0.0, threshold_high=0.0, x_spacing=50):
     cmap = sns.color_palette("magma_r", as_cmap=True)
 
     all_scatter = []
     a = 0
     for i, tensor in enumerate(tensor_dict.values()):
-        
         if torch.is_tensor(tensor):
             tensor = tensor.detach().cpu().numpy()
         
         if len(tensor.shape) == 1:
-            tensor = np.expand_dims(tensor, axis=0)
-            tensor = np.expand_dims(tensor, axis=0)
+            tensor = np.expand_dims(tensor, axis=-1)
+            tensor = np.expand_dims(tensor, axis=-1)
         
         if len(tensor.shape) == 2:
-            tensor = np.expand_dims(tensor, axis=0)
+            tensor = np.expand_dims(tensor, axis=-1)
 
         mask = (tensor >= threshold_low) & (tensor <= threshold_high)
         indices = np.argwhere(mask)
@@ -51,7 +45,7 @@ def visualize_tensor_scatter_dict(
         # 🔥 X ekseninde offset
         indices = indices.copy()
         a += 1
-        indices[:, -1] += a * x_spacing
+        indices[:, 0] += a * x_spacing
 
         scatter = gl.GLScatterPlotItem(
             pos=indices,
@@ -59,6 +53,7 @@ def visualize_tensor_scatter_dict(
             size=dot_size,
             pxMode=True
         )
+        
 
         view_widget.addItem(scatter)
         all_scatter.append(scatter)
