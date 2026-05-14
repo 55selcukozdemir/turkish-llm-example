@@ -1,3 +1,4 @@
+from benimkutuphanem.components import TensorPlotItemGrid, Text3D, TensorPlotItem
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore
@@ -5,6 +6,8 @@ from pyqtgraph.Qt import QtGui, QtCore
 import numpy as np
 
 import qdarkstyle
+from qt_material import apply_stylesheet
+
 import torch
 
 import matplotlib.cm as cm
@@ -18,10 +21,17 @@ def selam():
 
 def visualize_tensor_scatter_dict(view_widget, tensor_dict, dot_size=10, threshold_low=0.0, threshold_high=0.0, x_spacing=50):
     cmap = sns.color_palette("magma_r", as_cmap=True)
-
+    
     all_scatter = []
     a = 0
     for i, tensor in enumerate(tensor_dict.values()):
+
+        ss = TensorPlotItem("test", tensor)
+
+                
+        view_widget.addItem(ss)
+        all_scatter.append(ss)
+        return 
         if torch.is_tensor(tensor):
             tensor = tensor.detach().cpu().numpy()
         
@@ -54,7 +64,7 @@ def visualize_tensor_scatter_dict(view_widget, tensor_dict, dot_size=10, thresho
             pxMode=True
         )
         
-
+        
         view_widget.addItem(scatter)
         all_scatter.append(scatter)
 
@@ -63,41 +73,209 @@ def visualize_tensor_scatter_dict(view_widget, tensor_dict, dot_size=10, thresho
         return None
 
     return all_scatter
+# ViewPresetCube
+from PyQt5 import QtCore
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 
-class ViewPresetButtonGroup(pg.QtWidgets.QWidget):
 
-    def __init__(self, opengl_view : gl.GLViewWidget):
+class ViewPresetCube(pg.QtWidgets.QWidget):
+
+    def __init__(self, opengl_view: gl.GLViewWidget):
         super().__init__()
+
         self.opengl_view = opengl_view
 
-        layout = pg.QtWidgets.QHBoxLayout(self)
-        
-        self.button_side = pg.QtWidgets.QPushButton(text="yan")
-        self.button_front = pg.QtWidgets.QPushButton(text="ön")
-        self.button_top = pg.QtWidgets.QPushButton(text="üst")
+        grid = pg.QtWidgets.QGridLayout(self)
+        grid.setSpacing(2)
 
-        self.button_side.clicked.connect(lambda :self.set_camera_angle("side"))
-        self.button_front.clicked.connect(lambda: self.set_camera_angle("front"))
+        # ---------------- Buttons ----------------
+
+        self.button_top = self.make_button("ÜST")
+        self.button_front = self.make_button("ÖN")
+        self.button_back = self.make_button("ARKA")
+        self.button_left = self.make_button("SOL")
+        self.button_right = self.make_button("SAĞ")
+
+        # ---------------- Layout ----------------
+
+        grid.addWidget(self.button_top,   0, 1)
+        grid.addWidget(self.button_left,  1, 0)
+        grid.addWidget(self.button_front, 1, 1)
+        grid.addWidget(self.button_right, 1, 2)
+        grid.addWidget(self.button_back,  2, 1)
+
+        # ---------------- Connections ----------------
+
+        self.button_top.clicked.connect(
+            lambda: self.animate_camera(0, 90)
+        )
+
+        self.button_front.clicked.connect(
+            lambda: self.animate_camera(-90, 0)
+        )
+
+        self.button_back.clicked.connect(
+            lambda: self.animate_camera(90, 0)
+        )
+
+        self.button_left.clicked.connect(
+            lambda: self.animate_camera(180, 0)
+        )
+
+        self.button_right.clicked.connect(
+            lambda: self.animate_camera(0, 0)
+        )
+
+        # ---------------- Animation Timer ----------------
+
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.update_animation)
+
+        self.target_azimuth = 0
+        self.target_elevation = 0
+
+        self.animation_speed = 0.15
+
+    # ==================================================
+
+    def make_button(self, text):
+
+        button = pg.QtWidgets.QPushButton(text)
+
+        button.setFixedSize(60, 60)
+
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #404040;
+                border: 1px solid #606060;
+                border-radius: 8px;
+                color: white;
+                font-weight: bold;
+            }
+
+            QPushButton:hover {
+                background-color: #505050;
+            }
+        """)
+
+        return button
+
+    # ==================================================
+
+    def animate_camera(self, azimuth, elevation):
+
+        self.target_azimuth = azimuth
+        self.target_elevation = elevation
+
+        self.timer.start(16)  # ~60 FPS
+
+    # ==================================================
+
+    def update_animation(self):
+
+        opts = self.opengl_view.opts
+
+        current_az = opts["azimuth"]
+        current_el = opts["elevation"]
+
+        # Interpolation
+        new_az = current_az + (
+            self.target_azimuth - current_az
+        ) * self.animation_speed
+
+        new_el = current_el + (
+            self.target_elevation - current_el
+        ) * self.animation_speed
+
+        self.opengl_view.setCameraPosition(
+            azimuth=new_az,
+            elevation=new_el
+        )
+
+        # Stop threshold
+        if (
+            abs(new_az - self.target_azimuth) < 0.5
+            and
+            abs(new_el - self.target_elevation) < 0.5
+        ):
+
+            self.opengl_view.setCameraPosition(
+                azimuth=self.target_azimuth,
+                elevation=self.target_elevation
+            )
+
+            self.timer.stop()
+class ViewPresetButtonGroup(pg.QtWidgets.QWidget):
+
+    def __init__(self, opengl_view: gl.GLViewWidget):
+        super().__init__()
+
+        self.opengl_view = opengl_view
+
+        grid = pg.QtWidgets.QGridLayout(self)
+        grid.setSpacing(2)
+
+        # Buttons
+        self.button_top = pg.QtWidgets.QPushButton("Üst")
+        self.button_front = pg.QtWidgets.QPushButton("Ön")
+        self.button_back = pg.QtWidgets.QPushButton("Arka")
+        self.button_left = pg.QtWidgets.QPushButton("Sol")
+        self.button_right = pg.QtWidgets.QPushButton("Sağ")
+
+        # Connect
         self.button_top.clicked.connect(lambda: self.set_camera_angle("top"))
+        self.button_front.clicked.connect(lambda: self.set_camera_angle("front"))
+        self.button_back.clicked.connect(lambda: self.set_camera_angle("back"))
+        self.button_left.clicked.connect(lambda: self.set_camera_angle("left"))
+        self.button_right.clicked.connect(lambda: self.set_camera_angle("right"))
 
-        layout.addWidget(self.button_side)
-        layout.addWidget(self.button_front)
-        layout.addWidget(self.button_top)
+        # Layout (cube style)
+        #
+        #        [ÜST]
+        # [SOL] [ÖN] [SAĞ]
+        #       [ARKA]
+        #
 
+        grid.addWidget(self.button_top,   0, 1)
+        grid.addWidget(self.button_left,  1, 0)
+        grid.addWidget(self.button_front, 1, 1)
+        grid.addWidget(self.button_right, 1, 2)
+        grid.addWidget(self.button_back,  2, 1)
+
+        self.setFixedSize(220, 180)
 
     def set_camera_angle(self, position):
 
         if position == "top":
-            self.opengl_view.setCameraPosition(azimuth=0, elevation=90)
+            self.opengl_view.setCameraPosition(
+                azimuth=0,
+                elevation=90
+            )
 
         elif position == "front":
-            self.opengl_view.setCameraPosition(azimuth=-90, elevation=0)
+            self.opengl_view.setCameraPosition(
+                azimuth=-90,
+                elevation=0
+            )
 
-        elif position == "side": # right
-            self.opengl_view.setCameraPosition(azimuth=0, elevation=0)
-        pass
+        elif position == "back":
+            self.opengl_view.setCameraPosition(
+                azimuth=90,
+                elevation=0
+            )
 
-    
+        elif position == "left":
+            self.opengl_view.setCameraPosition(
+                azimuth=180,
+                elevation=0
+            )
+
+        elif position == "right":
+            self.opengl_view.setCameraPosition(
+                azimuth=0,
+                elevation=0
+            )
 class DragValue(pg.QtWidgets.QDoubleSpinBox):
 
     def __init__(self, default = 0):
@@ -193,7 +371,7 @@ class ControlLayout(pg.QtWidgets.QVBoxLayout):
             a.textChanged(self.update_center)
         # Center --
 
-        self.view_preset_button_group = ViewPresetButtonGroup(opengl_view)
+        self.view_preset_button_group = ViewPresetCube(opengl_view)
         self.addWidget(self.view_preset_button_group)
 
         self.update_distance = CustomDragValue("distance", default=200)
@@ -230,7 +408,8 @@ class TensorMonitor(QtCore.QObject):
         # Variable
         self.current_data = None
         self.app = pg.mkQApp("Monitor")
-        self.app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+        # self.app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+        apply_stylesheet(self.app, theme='dark_teal.xml')
         # =========================
         # WINDOW
         # =========================
@@ -239,7 +418,8 @@ class TensorMonitor(QtCore.QObject):
         self.main_layout = pg.QtWidgets.QHBoxLayout()
 
         self.opengl_view = gl.GLViewWidget()
-
+        # self.opengl_view.setBackgroundColor(QtGui.QColor(98, 102, 105))
+        self.opengl_view.addItem(Text3D("selam"))
         self.controls_layout = ControlLayout(self.opengl_view)
         self.controls_layout.threshold_slider_low.textChanged(self.update_data)
         self.controls_layout.threshold_slider_high.textChanged(self.update_data)
@@ -278,11 +458,13 @@ class TensorMonitor(QtCore.QObject):
             self._updating = False
 
     def update_data(self):
+
         if self.scatter is not None:
-                self.opengl_view.clear()
+            TensorPlotItemGrid.delete_items_in_opengl_view(self.opengl_view, self.scatter)
 
         if self.current_data_dic is not None:
-            self.scatter = visualize_tensor_scatter_dict(self.opengl_view, self.current_data_dic, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
+            tensor_grid_view = TensorPlotItemGrid(self.opengl_view, self.current_data_dic, threshold_low=self.get_threshold_value()[0], threshold_high=self.get_threshold_value()[1])
+            self.scatter = tensor_grid_view.get_items()
         
     def get_threshold_value(self):
         return (self.controls_layout.threshold_slider_low.value() / 100, self.controls_layout.threshold_slider_high.value() / 100)
