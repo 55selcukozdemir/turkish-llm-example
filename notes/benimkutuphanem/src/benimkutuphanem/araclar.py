@@ -35,6 +35,7 @@ class TensorMonitor(QtCore.QObject):
         self.controls_layout = ControlLayout(self.opengl_view)
         self.controls_layout.threshold_slider_low.textChanged(self.update_data)
         self.controls_layout.threshold_slider_high.textChanged(self.update_data)
+        self.controls_layout.repeat_button
 
         # =========================
         # MAIN LAYOUT
@@ -99,12 +100,14 @@ class TrainerThread(QtCore.QThread):
     data_signal = QtCore.pyqtSignal(object)
     log_signal = QtCore.pyqtSignal(str)
     
-    def __init__(self, callback, tensor_monitor):
+    def __init__(self, callback, tensor_monitor: TensorMonitor):
         super().__init__()
         self.callback = callback
         self.running = True
         self.data_signal.connect(tensor_monitor.guncelle)
         self.log_signal.connect(print)
+
+        tensor_monitor.controls_layout.repeat_button(lambda: self.run())
     
     def log(self, log_txt: str):
         self.log_signal.emit(log_txt)

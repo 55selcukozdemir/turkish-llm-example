@@ -201,11 +201,11 @@ class ViewPresetCube(pg.QtWidgets.QWidget):
 
         self.target_azimuth = azimuth
         self.target_elevation = elevation
-        self.opengl_view.setCameraPosition(
-            azimuth=self.target_azimuth,
-            elevation=self.target_elevation
-        )
-        # self.timer.start(16)  # ~60 FPS
+        # self.opengl_view.setCameraPosition(
+        #     azimuth=self.target_azimuth,
+        #     elevation=self.target_elevation
+        # )
+        self.timer.start(16)  # ~60 FPS
 
     def update_animation(self):
 
@@ -329,6 +329,10 @@ class ControlLayout(pg.QtWidgets.QVBoxLayout):
     def __init__(self, opengl_view):
         super().__init__()
         self.opengl_view = opengl_view
+
+        self.repeat = pg.QtWidgets.QPushButton("repeat")
+        self.repeat_button = self.repeat.clicked.connect
+        self.addWidget(self.repeat)
         # Center ==
         self.slide_x = CustomDragValue("x", focus_function=self.update_inputs)
         self.slide_y = CustomDragValue("y", focus_function=self.update_inputs)
