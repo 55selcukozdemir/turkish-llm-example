@@ -1,12 +1,12 @@
 
-from benimkutuphanem import TensorMonitor
-from benimkutuphanem.araclar import TrainerThread
+from benimkutuphanem.src.benimkutuphanem import TensorMonitor
+from benimkutuphanem.src.benimkutuphanem.araclar import TrainerThread
 import pyqtgraph as pg
 
 import torch
 import torch.nn as nn
 import math
-from benimkutuphanem import TensorMonitor
+from benimkutuphanem.src.benimkutuphanem import TensorMonitor
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):

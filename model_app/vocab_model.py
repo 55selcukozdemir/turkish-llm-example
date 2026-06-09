@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from vocabulary import Vocabulary
+from model_app.vocabulary import Vocabulary
 class VocabModel(nn.Module):
     def __init__(self, feature_length, hidden_size):
         super().__init__()

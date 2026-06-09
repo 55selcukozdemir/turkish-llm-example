@@ -1,9 +1,9 @@
-from vocabulary import Vocabulary
-from tokenizer import Tokenizer
-from vocab_model import VocabModel
-from data import DataPreparer
-from bert import BERT, BertForMaskedLM
-from tensor_viewer import tensor_to_blender_ply, export_csv
+from model_app.vocabulary import Vocabulary
+from model_app.tokenizer import Tokenizer
+from model_app.vocab_model import VocabModel
+from model_app.data import DataPreparer
+from model_app.bert import BERT, BertForMaskedLM
+from model_app.tensor_viewer import tensor_to_blender_ply, export_csv
 import re
 
 import torch 

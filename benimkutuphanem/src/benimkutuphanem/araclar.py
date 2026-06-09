@@ -1,4 +1,4 @@
-from benimkutuphanem.components import ControlLayout, TensorPlotItemGrid
+from benimkutuphanem.src.benimkutuphanem.components import ControlLayout, TensorPlotItemGrid
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore
