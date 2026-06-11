@@ -2,13 +2,15 @@ from model_app.vocabulary import Vocabulary
 from model_app.tokenizer import Tokenizer
 from model_app.vocab_model import VocabModel
 from model_app.data import DataPreparer
-from model_app.bert import BERT, BertForMaskedLM
+from model_app.bert_model import BERT, BertForMaskedLM
 import re
 
 import torch 
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+
+import tqdm
 
 import numpy as np
 
@@ -19,7 +21,7 @@ num_heads = 4           # Attention head sayısı
 ff_hidden_size = 512    # Feed-Forward katmanının gizli boyutu
 max_seq_len = 32        # BERT dizi uzunluğu
 char_max_len = 70       # Bir kelimenin maksimum karakter uzunluğu
-bit_depth = 8
+bit_depth = 8           # Her karakterin kaç bit ile temsil edliceğeini gösterir
 
 test_text_path = "/Users/55selcukozdemir/Desktop/turkish-llm-example/notes/project/cikti.txt"
 
@@ -37,7 +39,8 @@ base_bert = BERT(
     num_layers=num_layers,
     num_heads=num_heads,
     ff_hidden_size=ff_hidden_size,
-    max_seq_len=max_seq_len
+    max_seq_len=max_seq_len,
+    char_max_len=char_max_len
 )
 
 model = BertForMaskedLM(base_bert)
@@ -47,35 +50,18 @@ optimizer = optim.Adam(list(model.parameters()) + list(vocab_model.parameters())
 criterion = nn.CrossEntropyLoss()
 epochs = 200
 
+
+
+for i in tqdm(range(10000)):
+    pass
+
+
+
+
+"""
+
 for epoch in range(epochs):
-
-    batchs = datapreparer.get_split_batchs(10)
-    train_batchs = []
-    # 'y' indeksi için bir alt liste yoksa oluştur
-    for y in range(len(batchs)):
-        train_batchs.append([]) # Yeni bir alt liste (satır) ekle
-        for b in range(len(batchs[y])):
-            train_batchs[y].append([]) # Satırın içine elemanı ekle
-    
-    for y, batch in enumerate(batchs):
-        # her seferde birden fazla metin gelecek ve her metnin birden fazla kelimesi olduğu için ayrı ayrı değerlendirmeliyim.
-
-        for i2, b in enumerate(batch):
-            all_text = re.findall(r"\w+|[^\w\s]", b) # metni parçaladım
-            tmp = []
-
-            vocab_matrices = []
-            for i, c in enumerate(all_text): # her cümlenin kelimelerini ilk özellik çıkarımı için işliyorum.
-                vocab_matrices.append(vocabulary.get_vocab_array(c))
-            
-            tmp = vocab_model(torch.tensor(np.array(vocab_matrices), dtype=torch.float32)) # her kelimeye positional encoding benzeri bir şey uyguladım devam ettim.
-            
-        
-            train_batchs[y][i2] = tmp
-
-        
     optimizer.zero_grad()
-    
     # 1. VocabModel ile o anki iterasyon için kelime embedding'lerini hesapla
     # vocab_matrices_tensor boyutu: (vocab_size, char_max_len, bit_depth)
     # word_embeddings boyutu: (vocab_size, hidden_size)
@@ -112,3 +98,5 @@ torch.save(model.state_dict(), "bert_model.pth")
 torch.save(vocab_model.state_dict(), "vocab_model.pth")
 print("Modeller 'bert_model.pth' ve 'vocab_model.pth' olarak kaydedildi.")
 
+
+"""

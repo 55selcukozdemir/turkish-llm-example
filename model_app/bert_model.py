@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import math
 
+from model_app.vocab_model import VocabModel
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
         super().__init__()
@@ -114,9 +116,16 @@ class BERTEmbedding(nn.Module):
         embeddings = self.dropout(embeddings)
         
         return embeddings
+    
+    
+class BertCustomEmbedding(nn.Module):
+    def __init__(self):
+        super().__init__()
+        vocab = VocabModel()
+
 
 class BERT(nn.Module):
-    def __init__(self, hidden_size=768, num_layers=12, num_heads=12, ff_hidden_size=3072, max_seq_len=512, type_vocab_size=2, dropout=0.1):
+    def __init__(self, hidden_size=768, num_layers=12, num_heads=12, ff_hidden_size=3072, max_seq_len=512, type_vocab_size=2, dropout=0.1, char_max_len = 70):
         super().__init__()
         self.embedding = BERTEmbedding(hidden_size, max_seq_len, type_vocab_size, dropout)
         

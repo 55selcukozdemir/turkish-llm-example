@@ -2,7 +2,12 @@ import torch
 import torch.nn as nn
 from model_app.vocabulary import Vocabulary
 class VocabModel(nn.Module):
-    def __init__(self, feature_length, hidden_size):
+    def __init__(self, feature_length: int, hidden_size: int):
+        """
+        Args:
+            feature_length (int): max char lenght * bit_depth
+            hidden_size (int): common two-layer size
+        """
         super().__init__()
 
         self.linear1 = nn.Linear(feature_length, 2048)
