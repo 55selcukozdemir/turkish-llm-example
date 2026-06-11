@@ -6,14 +6,14 @@ class VocabModel(nn.Module):
         """
         Args:
             feature_length (int): max char lenght * bit_depth
-            hidden_size (int): common two-layer size
+            hidden_size (int): output size of the last layer
         """
         super().__init__()
 
         self.linear1 = nn.Linear(feature_length, 2048)
-        self.linear2 = nn.Linear(2048, hidden_size)
-
         self.relu = nn.ReLU()
+        self.linear2 = nn.Linear(2048, hidden_size)
+        self.softmax = nn.Softmax()
 
     def forward(self, vocab):
         vocab = Vocabulary(70)
@@ -28,5 +28,6 @@ class VocabModel(nn.Module):
         x = self.linear1(vocab)
         x = self.relu(x)
         x = self.linear2(x)
+        x = self.softmax(x)
 
         return x
