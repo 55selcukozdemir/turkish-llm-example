@@ -1,16 +1,17 @@
-from model_app.vocabulary import Vocabulary
-from model_app.tokenizer import Tokenizer
-from model_app.vocab_model import VocabModel
-from model_app.data import DataPreparer
-from model_app.bert_model import BERT, BertForMaskedLM
-import re
+from vocabulary import VocabularyManager
+from tokenizer import Tokenizer
+from vocab_model import VocabModel
+from data import DataPreparer
+from bert_model import BERT, BertForMaskedLM, BertWordEmbedding
 
-import torch 
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch
 
-import tqdm
+
+from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 
@@ -22,38 +23,55 @@ ff_hidden_size = 512    # Feed-Forward katmanının gizli boyutu
 max_seq_len = 32        # BERT dizi uzunluğu
 char_max_len = 70       # Bir kelimenin maksimum karakter uzunluğu
 bit_depth = 8           # Her karakterin kaç bit ile temsil edliceğeini gösterir
+feature_length = char_max_len * bit_depth
 
-test_text_path = "/Users/55selcukozdemir/Desktop/turkish-llm-example/notes/project/cikti.txt"
+
+BASE_DIR = Path(__file__).resolve().parent
+test_text_path = BASE_DIR / "dataset" / "cikti.txt"
 
 print("Dosyalar okunuyor ve Tokenizer, Vocabulary hazırlanıyor...")
 datapreparer = DataPreparer(test_text_path)
-tokenizer = Tokenizer(test_text_path, hidden_size)
+
+
 
 
 print("Modeller başlatılıyor...")
-feature_length = char_max_len * bit_depth
 vocab_model = VocabModel(feature_length, hidden_size)
+tokenizer = Tokenizer(test_text_path, hidden_size, vocab_model)
 
 base_bert = BERT(
+    vocab_model=vocab_model,
     hidden_size=hidden_size,
     num_layers=num_layers,
     num_heads=num_heads,
     ff_hidden_size=ff_hidden_size,
     max_seq_len=max_seq_len,
-    char_max_len=char_max_len
+    feature_length=feature_length
 )
 
 model = BertForMaskedLM(base_bert)
 
 # Optimizasyon için hem BERT hem de VocabModel parametreleri verilir
-optimizer = optim.Adam(list(model.parameters()) + list(vocab_model.parameters()), lr=1e-3)
+optimizer = optim.Adam(list(model.parameters()), lr=1e-3)
 criterion = nn.CrossEntropyLoss()
 epochs = 200
 
+for i in tqdm(datapreparer.get_list_of_array()):
+    optimizer.zero_grad()
+    
+
+    print([VocabularyManager(char_max_len).get_vocab_array(a).shape for  a in Tokenizer.tokenize(i)])
+    word_representation = [VocabularyManager(char_max_len).get_vocab_array(a) for a in Tokenizer.tokenize(i)] 
+    prediction_scores: torch.Tensor = model(word_representation)
+    
+    loss = criterion(prediction_scores.view(-1, vocab_size), targets.view(-1))
 
 
-for i in tqdm(range(10000)):
-    pass
+    loss.backward()
+    optimizer.step()
+    
+    print(f"Epoch {epoch+1:02d}/{epochs} - Loss: {loss.item():.4f}")
+    print(i)
 
 
 

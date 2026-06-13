@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-class Vocabulary():
+class VocabularyManager():
     def __init__(self, max_seq_len, bit_depth=8):
         """
             ['<PAD>',   # padding (sequence equalization)
@@ -13,7 +13,7 @@ class Vocabulary():
         """
         self.vocab = (
             # Bunlar karakter değil ki
-            # ['<PAD>', '<UNK>', '<BOS>', '<EOS>', '<MASK>', ' '] +
+            ['<PAD>', '<UNK>', '<BOS>', '<EOS>', '<MASK>', ' '] +
             
             list('abcçdefgğhıijklmnoöprsştuüvyz') +
             list('ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ') +
@@ -54,7 +54,7 @@ class Vocabulary():
 
         return PE
 
-    def __8bit_encode(self, text):
+    def __8bit_encode(self, text: str):
         """
         return: (max_seq_len, bit_depth) 8-bit matrix
         """

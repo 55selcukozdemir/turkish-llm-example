@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import math
 
-from model_app.vocab_model import VocabModel
+from vocab_model import VocabModel
+from vocabulary import VocabularyManager
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
@@ -85,58 +86,105 @@ class TransformerBlock(nn.Module):
         
         return x
 
-class BERTEmbedding(nn.Module):
-    def __init__(self, hidden_size, max_seq_len=512, type_vocab_size=2, dropout=0.1):
+# still missing linear layer
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model: int, seq_len: int, dropout: float) -> None:
         super().__init__()
-        # self.token_embeddings = nn.Embedding(vocab_size, hidden_size, padding_idx=0) # KALDIRILDI
-        self.position_embeddings = nn.Embedding(max_seq_len, hidden_size)
-        self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
-        
-        self.norm = nn.LayerNorm(hidden_size)
+        self.d_model = d_model
+        self.seq_len = seq_len
         self.dropout = nn.Dropout(dropout)
+        # Create a matrix of shape (seq_len, d_model)
+        pe = torch.zeros(seq_len, d_model)
+        # Create a vector of shape (seq_len)
+        position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1) # (seq_len, 1)
+        # Create a vector of shape (d_model)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)) # (d_model / 2)
+        # Apply sine to even indices
+        pe[:, 0::2] = torch.sin(position * div_term) # sin(position * (10000 ** (2i / d_model))
+        # Apply cosine to odd indices
+        pe[:, 1::2] = torch.cos(position * div_term) # cos(position * (10000 ** (2i / d_model))
+        # Add a batch dimension to the positional encoding
+        pe = pe.unsqueeze(0) # (1, seq_len, d_model)
+        # Register the positional encoding as a buffer
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model)
+        return self.dropout(x)
+
+# class BERTEmbedding(nn.Module):
+#     def __init__(self, hidden_size, embedding_model: nn.Module, max_seq_len=512, type_vocab_size=2, dropout=0.1):
+#         super().__init__()
+#         # self.token_embeddings = nn.Embedding(vocab_size, hidden_size, padding_idx=0) # KALDIRILDI
+#         self.position_embeddings = nn.Embedding(max_seq_len, hidden_size)
+#         self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
         
-    def forward(self, input_ids, word_embeddings, token_type_ids=None):
-        seq_length = input_ids.size(1)
+#         self.norm = nn.LayerNorm(hidden_size)
+#         self.dropout = nn.Dropout(dropout)
         
-        # Pozisyon ID'leri oluştur (0, 1, 2, ..., seq_length - 1)
-        position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
-        position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+#     def forward(self, input_ids, word_embeddings, token_type_ids=None):
+#         seq_length = input_ids.size(1)
         
-        if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input_ids)
+#         # Pozisyon ID'leri oluştur (0, 1, 2, ..., seq_length - 1)
+#         position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
+#         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+        
+#         if token_type_ids is None:
+#             token_type_ids = torch.zeros_like(input_ids)
             
-        # Dinamik word_embeddings kullanarak token embedding'leri seç
-        token_embeds = word_embeddings[input_ids] 
-        pos_embeds = self.position_embeddings(position_ids)
-        type_embeds = self.token_type_embeddings(token_type_ids)
+#         # Dinamik word_embeddings kullanarak token embedding'leri seç
+#         token_embeds = word_embeddings[input_ids] 
+#         pos_embeds = self.position_embeddings(position_ids)
+#         type_embeds = self.token_type_embeddings(token_type_ids)
         
-        # Tüm embeddingleri topla
-        embeddings = token_embeds + pos_embeds + type_embeds
-        embeddings = self.norm(embeddings)
-        embeddings = self.dropout(embeddings)
+#         # Tüm embeddingleri topla
+#         embeddings = token_embeds + pos_embeds + type_embeds
+#         embeddings = self.norm(embeddings)
+#         embeddings = self.dropout(embeddings)
         
-        return embeddings
+#         return embeddings
     
     
-class BertCustomEmbedding(nn.Module):
-    def __init__(self):
+class BertWordEmbedding(nn.Module):
+    def __init__(self,  feature_length: int, hidden_size: int, vocab_model: VocabModel):
+        """
+        Args:
+            feature_length (int): presentation size of word
+            hidden_size (int): embedding size
+        """
         super().__init__()
-        vocab = VocabModel()
+        self.vocab_model = vocab_model
+        self.vocabulary = VocabularyManager(70, 8)
+        
+    def forward(self, word_representings):
+        """
+        Args:
+            words: word list 
+        """
+        outputs = [self.vocab_model(a) for a in word_representings]
+        outputs = torch.stack(outputs)
+        return outputs
 
 
 class BERT(nn.Module):
-    def __init__(self, hidden_size=768, num_layers=12, num_heads=12, ff_hidden_size=3072, max_seq_len=512, type_vocab_size=2, dropout=0.1, char_max_len = 70):
+    def __init__(self, vocab_model: VocabModel, hidden_size=768, num_layers=12, num_heads=12, ff_hidden_size=3072, max_seq_len=512, type_vocab_size=2, dropout=0.1, feature_length = 70 * 8):
         super().__init__()
-        self.embedding = BERTEmbedding(hidden_size, max_seq_len, type_vocab_size, dropout)
+        # self.embedding = BERTEmbedding(hidden_size, max_seq_len, type_vocab_size, dropout)
+        
+        self.positional_encoding = PositionalEncoding(hidden_size, max_seq_len, dropout)
+        self.word_embedding_model = BertWordEmbedding(feature_length, hidden_size, vocab_model)
         
         self.layers = nn.ModuleList([
             TransformerBlock(hidden_size, num_heads, ff_hidden_size, dropout)
             for _ in range(num_layers)
         ])
         
-    def forward(self, input_ids, word_embeddings, token_type_ids=None, attention_mask=None):
+    def forward(self, word_representation, token_type_ids=None, attention_mask=None):
+        
+        word_embeddings = self.word_embedding_model(word_representation) # burada embedding oluşuyor. 
         # 1. Girdileri embedding katmanından geçir
-        x = self.embedding(input_ids, word_embeddings, token_type_ids)
+        x = self.positional_encoding(word_embeddings)
         
         # 2. Üst üste dizilmiş Transformer bloklarından (Encoder) geçir
         for layer in self.layers:
@@ -145,19 +193,21 @@ class BERT(nn.Module):
         return x
 
 class BertForMaskedLM(nn.Module):
-    def __init__(self, bert_model):
+    def __init__(self, bert_model: BERT, feature_length = 70 * 8):
         super().__init__()
         self.bert = bert_model
         # Sınıflandırıcı kaldırıldı, bunun yerine word_embeddings ile matris çarpımı yapılacak
         
-    def forward(self, input_ids, word_embeddings, token_type_ids=None, attention_mask=None):
+    def forward(self, word_representation, token_type_ids=None, attention_mask=None):
         # BERT çıktısını al: (batch_size, seq_len, hidden_size)
-        sequence_output = self.bert(input_ids, word_embeddings, token_type_ids, attention_mask)
+        sequence_output = self.bert(word_representation, token_type_ids, attention_mask)
         
         # Sınıflandırma logitslerini hesaplamak için sequence_output ile word_embeddings çarpılır.
         # word_embeddings: (vocab_size, hidden_size) -> .transpose(0, 1) -> (hidden_size, vocab_size)
         # prediction_scores: (batch_size, seq_len, vocab_size)
-        prediction_scores = torch.matmul(sequence_output, word_embeddings.transpose(0, 1))
+
+        word_embeddings = self.bert.word_embedding_model(word_representation)
+        prediction_scores = torch.matmul(sequence_output, word_embeddings.transpose(2, 1))
         
         return prediction_scores
 
