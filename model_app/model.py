@@ -60,18 +60,21 @@ for i in tqdm(datapreparer.get_list_of_array()):
     optimizer.zero_grad()
     
 
-    print([VocabularyManager(char_max_len).get_vocab_array(a).shape for  a in Tokenizer.tokenize(i)])
+    # print([VocabularyManager(char_max_len).get_vocab_array(a).shape for  a in Tokenizer.tokenize(i)])
     word_representation = [VocabularyManager(char_max_len).get_vocab_array(a) for a in Tokenizer.tokenize(i)] 
     prediction_scores: torch.Tensor = model(word_representation)
+
     
-    loss = criterion(prediction_scores.view(-1, vocab_size), targets.view(-1))
+    # >> prediction_scores.shape
+    # >> torch.Size([11, 1, 1])
+    probability_matrix = torch.full(prediction_scores.shape, .1)
+    loss = criterion(prediction_scores, probability_matrix)
 
 
     loss.backward()
     optimizer.step()
-    
-    print(f"Epoch {epoch+1:02d}/{epochs} - Loss: {loss.item():.4f}")
-    print(i)
+    # print(i)
+    print(f"- Loss: {loss.item():.4f}")
 
 
 

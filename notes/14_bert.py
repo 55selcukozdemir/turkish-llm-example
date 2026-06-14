@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from benimkutuphanem.src.benimkutuphanem import TensorMonitor
+from rich import print
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         
         # Loss hesaplamak için tensor boyutlarını (Batch * Seq_Len, Vocab_Size) şeklinde düzleştir
         loss = criterion(outputs.view(-1, vocab_size), labels.view(-1))
-        
+        print(loss)
         # Geri Yayılım (Backward Pass)
         loss.backward()
         optimizer.step()
