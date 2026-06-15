@@ -193,22 +193,17 @@ class BERT(nn.Module):
         return x
 
 class BertForMaskedLM(nn.Module):
-    def __init__(self, bert_model: BERT, feature_length = 70 * 8):
+    def __init__(self, bert_model: BERT, vocab_size, hidden_size):
         super().__init__()
         self.bert = bert_model
         # Sınıflandırıcı kaldırıldı, bunun yerine word_embeddings ile matris çarpımı yapılacak
-        
+        self.classifier = nn.Linear(hidden_size, vocab_size)
+
     def forward(self, word_representation, token_type_ids=None, attention_mask=None):
         # BERT çıktısını al: (batch_size, seq_len, hidden_size)
         sequence_output = self.bert(word_representation, token_type_ids, attention_mask)
         
-        # Sınıflandırma logitslerini hesaplamak için sequence_output ile word_embeddings çarpılır.
-        # word_embeddings: (vocab_size, hidden_size) -> .transpose(0, 1) -> (hidden_size, vocab_size)
-        # prediction_scores: (batch_size, seq_len, vocab_size)
-
-        word_embeddings = self.bert.word_embedding_model(word_representation)
-        prediction_scores = torch.matmul(sequence_output, word_embeddings.transpose(2, 1))
-        
+        prediction_scores = self.classifier(sequence_output)
         return prediction_scores
 
 if __name__ == "__main__":

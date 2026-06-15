@@ -49,7 +49,7 @@ base_bert = BERT(
     feature_length=feature_length
 )
 
-model = BertForMaskedLM(base_bert)
+model = BertForMaskedLM(base_bert, len(tokenizer.word_list), hidden_size)
 
 # Optimizasyon için hem BERT hem de VocabModel parametreleri verilir
 optimizer = optim.Adam(list(model.parameters()), lr=1e-3)
@@ -59,7 +59,7 @@ epochs = 200
 for i in tqdm(datapreparer.get_list_of_array()):
     optimizer.zero_grad()
     
-
+    
     # print([VocabularyManager(char_max_len).get_vocab_array(a).shape for  a in Tokenizer.tokenize(i)])
     word_representation = [VocabularyManager(char_max_len).get_vocab_array(a) for a in Tokenizer.tokenize(i)] 
     prediction_scores: torch.Tensor = model(word_representation)

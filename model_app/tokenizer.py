@@ -7,8 +7,6 @@ import json
 from vocab_model import VocabModel
 
 class Tokenizer():
-    
-   
     def __init__(self, text_file_path, d_model, vocab_model: VocabModel):
         self.vocab_model = vocab_model
         self.text_file_path = text_file_path
