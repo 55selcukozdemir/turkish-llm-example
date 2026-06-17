@@ -4,16 +4,23 @@ import torch.nn as nn
 import re
 import json
 
+
+
+
+from benimkutuphanem import Logger
+from vocabulary import VocabularyManager
 from vocab_model import VocabModel
+from karbon_turk_config import KarbonTurkConfig
 
 class Tokenizer():
     
-   
-    def __init__(self, text_file_path, d_model, vocab_model: VocabModel):
+    def __init__(self, config:KarbonTurkConfig , vocab_model: VocabModel):
+        self.logger : Logger = config.logger
+        self.config = config
         self.vocab_model = vocab_model
-        self.text_file_path = text_file_path
+        
         # Dosya yolunu parametre olarak kullanalım
-        with open(self.text_file_path, "r", encoding="utf-8") as f:
+        with open(self.config.data_set, "r", encoding="utf-8") as f:
             text = f.read().lower()
         
         all_text = self.tokenize(text)
@@ -53,8 +60,28 @@ class Tokenizer():
         if 0 <= index < len(self.word_list):
             return self.word_list[index][1]
         return None
+    
     @staticmethod
     def tokenize(text):
         # kelime + noktalama koru
         return re.findall(r"\w+|[^\w\s]", text)
+    
+    
+    def get_line_word_representation(self, line_str_list: list[str]):
+    
+        all_line_presentaiton: np.ndarray = []        
+        for x, line_str in enumerate(line_str_list):
+            tokens = Tokenizer.tokenize(line_str)
+            tmp_line_presentation: np.ndarray = []
+            for y in tokens:
+                token_presentation = self.config.vacobulary_manager.get_vocab_array(y)
+                tmp_line_presentation.append(token_presentation.flatten()) 
+                # self.logger.log_ndarray(F"token_{y}", token_presentation)
+
+
+            all_line_presentaiton.append(tmp_line_presentation)
+        return np.array(all_line_presentaiton)
+        
+        
+        
     

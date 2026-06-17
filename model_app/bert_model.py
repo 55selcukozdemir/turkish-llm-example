@@ -5,6 +5,9 @@ import math
 from vocab_model import VocabModel
 from vocabulary import VocabularyManager
 
+import matplotlib.pyplot as plt
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, hidden_size, num_heads, dropout=0.1):
         super().__init__()
@@ -105,12 +108,15 @@ class PositionalEncoding(nn.Module):
         # Apply cosine to odd indices
         pe[:, 1::2] = torch.cos(position * div_term) # cos(position * (10000 ** (2i / d_model))
         # Add a batch dimension to the positional encoding
+        
         pe = pe.unsqueeze(0) # (1, seq_len, d_model)
+        
         # Register the positional encoding as a buffer
         self.register_buffer('pe', pe)
 
     def forward(self, x):
         x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # (batch, seq_len, d_model)
+        # x = x + (self.pe[:x.shape[0], :]).requires_grad_(False) # (batch, seq_len, d_model)
         return self.dropout(x)
 
 # class BERTEmbedding(nn.Module):
@@ -155,15 +161,13 @@ class BertWordEmbedding(nn.Module):
         """
         super().__init__()
         self.vocab_model = vocab_model
-        self.vocabulary = VocabularyManager(70, 8)
         
     def forward(self, word_representings):
         """
         Args:
             words: word list 
         """
-        outputs = [self.vocab_model(a) for a in word_representings]
-        outputs = torch.stack(outputs)
+        outputs = self.vocab_model(word_representings)
         return outputs
 
 
@@ -171,6 +175,7 @@ class BERT(nn.Module):
     def __init__(self, vocab_model: VocabModel, hidden_size=768, num_layers=12, num_heads=12, ff_hidden_size=3072, max_seq_len=512, type_vocab_size=2, dropout=0.1, feature_length = 70 * 8):
         super().__init__()
         # self.embedding = BERTEmbedding(hidden_size, max_seq_len, type_vocab_size, dropout)
+        self.hidden_size = hidden_size
         
         self.positional_encoding = PositionalEncoding(hidden_size, max_seq_len, dropout)
         self.word_embedding_model = BertWordEmbedding(feature_length, hidden_size, vocab_model)
@@ -205,10 +210,15 @@ class BertForMaskedLM(nn.Module):
         # Sınıflandırma logitslerini hesaplamak için sequence_output ile word_embeddings çarpılır.
         # word_embeddings: (vocab_size, hidden_size) -> .transpose(0, 1) -> (hidden_size, vocab_size)
         # prediction_scores: (batch_size, seq_len, vocab_size)
+        
+        # fig, ax = plt.subplots()
+        # # Invalid shape (11, 1, 256) for image data
+        # im = ax.imshow(sequence_output.view(-1, self.bert.hidden_size).detach().cpu().numpy())
+        # plt.show()
 
         word_embeddings = self.bert.word_embedding_model(word_representation)
-        prediction_scores = torch.matmul(sequence_output, word_embeddings.transpose(2, 1))
-        
+        # prediction_scores = torch.matmul(sequence_output, word_embeddings.transpose(2, 1))
+        prediction_scores = sequence_output @ word_embeddings.transpose(2, 1)
         return prediction_scores
 
 if __name__ == "__main__":
