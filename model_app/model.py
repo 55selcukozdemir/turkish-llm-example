@@ -53,25 +53,52 @@ def test():
                 )
     
     pbar = tqdm(data_loader)
-    for data in pbar:
-        optimizer.zero_grad()
+    # for data in pbar:
+    #     optimizer.zero_grad()
         
-        word_representationi = data["input"]
-        prediction_scores: torch.Tensor = model(word_representationi)
+    #     word_representationi = data["input"]
+    #     prediction_scores: torch.Tensor = model(word_representationi)
 
         
-        # >> prediction_scores.shape
-        # >> torch.Size([11, 1, 1])
-        probability_matrix = torch.full(prediction_scores.shape, 1.0)
-        loss = criterion(prediction_scores, probability_matrix)
+    #     # >> prediction_scores.shape
+    #     # >> torch.Size([11, 1, 1])
+    #     probability_matrix = torch.full(prediction_scores.shape, 1.0)
+    #     loss = criterion(prediction_scores, probability_matrix)
 
 
-        loss.backward()
-        optimizer.step()
-        # print(i)
-        # print(f"- Loss: {loss.item():.4f}")
-        # print(f"- Loss: {loss.item()}")
-        pbar.set_postfix(loss=loss.item())
+    #     loss.backward()
+    #     optimizer.step()
+    #     # print(i)
+    #     # print(f"- Loss: {loss.item():.4f}")
+    #     # print(f"- Loss: {loss.item()}")
+    #     pbar.set_postfix(loss=loss.item())
+    
+    epoch_pbar = tqdm(range(10), desc="Toplam Eğitimi")
+
+    for epoch in epoch_pbar:
+        epoch_loss = 0.0
+        
+        # İç döngü: Veriler için tqdm (leave=False vererek işi bitince ekrandan silinmesini sağlarız)
+        data_pbar = tqdm(data_loader, desc=f"Epoch {epoch+1}", leave=False)
+        
+        for data in data_pbar:
+            optimizer.zero_grad()
+            
+            word_representationi = data["input"]
+            prediction_scores: torch.Tensor = model(word_representationi)
+
+            probability_matrix = torch.full(prediction_scores.shape, 1.0, device=prediction_scores.device)
+            loss = criterion(prediction_scores, probability_matrix)
+
+            loss.backward()
+            optimizer.step()
+            
+            epoch_loss += loss.item()
+            data_pbar.set_postfix(batch_loss=loss.item())
+        
+        # Dış barın yanına o epoch'un ortalama loss değerini yazdır
+        avg_loss = epoch_loss / len(data_loader)
+        epoch_pbar.set_postfix(avg_epoch_loss=f"{avg_loss:.4f}")
 
 
     # print("a")

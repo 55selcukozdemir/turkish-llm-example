@@ -8,18 +8,41 @@ class DataPreparer(Dataset):
         self.config = config
         
         satirlar = []
-
+        number_continued_line = 0
         with open(config.data_set, "r", encoding="utf-8") as file:
             for satir in file:
+                
+                # temporarliy
+                str_line = satir.strip()
+                if config.max_seq_len < (len(Tokenizer.tokenize(str_line)) - 3):
+                    number_continued_line += 1
+                    continue
                 satirlar.append(satir.strip())
-
+        config.logger.info(F"umber of continiued line {number_continued_line}")
         self.satirlar = satirlar
 
         self.bos_token = self.get_word_representing(config.spacial_tokens_BOS)
         self.eos_token = self.get_word_representing(config.spacial_tokens_EOS)
 
         self.padding_token = self.get_word_representing(config.spacial_tokens_padding)
-    
+        
+        # check dataset
+        
+        self.check_max_squence_length()
+    def check_max_squence_length(self):
+        max_len = 0
+        max_len_line = 0
+        for index, i in enumerate(self.satirlar):
+            tokens_of_line_lenght = len(Tokenizer.tokenize(i))
+            
+            if  tokens_of_line_lenght > max_len:
+                max_len = tokens_of_line_lenght
+                max_len_line = index
+                
+        if self.config.max_seq_len < max_len - 2:
+            raise ValueError(F"The maximum number of sentence has been exceeded({max_len} - {max_len_line})")
+        return max_len    
+            
     def __len__(self):
         return len(self.satirlar)
     
